@@ -43,7 +43,7 @@ class EmailParser:
             subject = email_data.get("subject", "")
             
             # Check if this is a valid codemail request
-            is_codemail, project_name, instructions = self.subject_validator.validate_subject(subject)
+            is_codemail, project_name, _ = self.subject_validator.validate_subject(subject)
             
             if not is_codemail:
                 logger.warning(f"Email subject does not match codemail pattern: '{subject}'")
@@ -51,9 +51,12 @@ class EmailParser:
             
             body = email_data.get("body", "")
             
-            # If instructions weren't extracted from subject, try to get them from body
+            # Extract instructions from body
+            instructions = self._extract_instructions_from_body(body)
+            
             if not instructions or instructions.strip() == "":
-                instructions = self._extract_instructions_from_body(body)
+                logger.warning("No instructions found in email body")
+                return None
             
             return {
                 "project_name": project_name,
@@ -68,18 +71,8 @@ class EmailParser:
     
     def _extract_project_name(self, subject, body):
         """Extract project name from subject or body."""
-        # Try to extract from subject first (format: "[project-name] instructions")
-        subject_match = re.search(r'\[([^\]]+)\]', subject)
-        if subject_match:
-            return subject_match.group(1).strip().lower()
-        
-        # Try to extract from body (format: "Project: project-name" or "# Project: project-name")
-        body_match = re.search(r'^(?:#)?\s*Project\s*[:\s]+(\S+)', body, re.MULTILINE | re.IGNORECASE)
-        if body_match:
-            return body_match.group(1).strip().lower()
-        
-        # Default to "default" if no project name found
-        logger.info("No project name found in email, using 'default'")
+        # Project name is now extracted from the subject line by the validator
+        # This method is kept for potential future use but not used in current implementation
         return self.default_project
     
     def _extract_instructions_from_body(self, body):
@@ -88,8 +81,6 @@ class EmailParser:
         instructions_lines = []
         
         skip_patterns = [
-            r'^Project\s*[:\s]*',  # Project: project-name
-            r'^#\s*Project\s*[:\s]*',  # # Project: project-name
             r'^From\s*[:\s]*',  # From: sender
             r'^Subject\s*[:\s]*',  # Subject: subject
             r'^To\s*[:\s]*',  # To: recipient

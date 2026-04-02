@@ -21,26 +21,28 @@ def test_subject_validator():
     
     validator = create_subject_validator()
     
-    # Test valid subjects
+    # Test valid subjects (instructions are now in body, not subject)
     valid_cases = [
-        ("codemail:[my-project] Fix the login bug", True, "my-project", "Fix the login bug"),
-        ("CODEMAIL:[My-Project] Add new feature", True, "my-project", "Add new feature"),
-        ("Codemail: [test-project] Update documentation", True, "test-project", "Update documentation"),
+        ("codemail:[my-project]", True, "my-project"),
+        ("CODEMAIL:[My-Project]", True, "my-project"),
+        ("Codemail: [test-project]", True, "test-project"),
     ]
     
-    for subject, expected_valid, expected_project, expected_instructions in valid_cases:
+    for subject, expected_valid, expected_project in valid_cases:
         is_valid, project, instructions = validator.validate_subject(subject)
         
-        if is_valid == expected_valid and project == expected_project and instructions == expected_instructions:
+        # Instructions should always be None now
+        if is_valid == expected_valid and project == expected_project and instructions is None:
             print(f"  ✓ Valid: {subject}")
         else:
-            print(f"  ✗ FAIL: {subject}")
+            print(f"  ✗ FAIL: {subject} (expected valid={expected_valid}, project={expected_project}, instructions=None)")
     
     # Test invalid subjects
     invalid_cases = [
         "Hello, how are you?",
         "[random] This is not a codemail request",
         "codemail: no brackets here",
+        "codemail:[project] with instructions in subject",  # Instructions should not be in subject
     ]
     
     for subject in invalid_cases:
@@ -60,18 +62,18 @@ def test_email_parser():
     
     parser = create_email_parser()
     
-    # Test 1: Basic email with codemail prefix
+    # Test 1: Basic email with codemail prefix (instructions in body)
     email1 = {
-        "subject": "codemail:[test-project] Implement a hello world function",
+        "subject": "codemail:[test-project]",
         "body": "Please implement a simple hello world function.",
         "from": "user@example.com"
     }
     result1 = parser.parse_email(email1)
     print(f"  Test 1 - Codemail format: {'PASS' if result1 else 'FAIL'}")
     
-    # Test 2: Email with codemail prefix
+    # Test 2: Email with codemail prefix (instructions in body)
     email2 = {
-        "subject": "codemail:[my-app] Implement a calculator",
+        "subject": "codemail:[my-app]",
         "body": "Please implement a calculator function.",
         "from": "user@example.com"
     }
@@ -80,7 +82,7 @@ def test_email_parser():
     
     # Test 3: Validation
     is_valid, error = parser.validate_task(result1) if result1 else (False, "None result")
-    print(f"  Test 2 - Validation: {'PASS' if is_valid else 'FAIL'}")
+    print(f"  Test 3 - Validation: {'PASS' if is_valid else 'FAIL'}")
     
     print("Email Parser tests completed.\n")
 
@@ -159,9 +161,9 @@ def test_integration():
     parser = create_email_parser()
     queue = create_task_queue()
     
-    # Simulate email processing
+    # Simulate email processing (instructions in body, not subject)
     email_data = {
-        "subject": "codemail:[integration-test] Write a simple Python function",
+        "subject": "codemail:[integration-test]",
         "body": "Write a Python function that calculates the Fibonacci sequence.",
         "from": "test@example.com"
     }

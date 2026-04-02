@@ -17,10 +17,11 @@ class SubjectValidator:
         # Default prefix for codemail subjects - can be overridden via config
         self.prefix = prefix
         
-        # Pattern: [prefix][project-name] instructions
-        # Example: "codemail:[my-project] Fix the login bug"
+        # Pattern: [prefix][project-name]
+        # Example: "codemail:[my-project]"
+        # Instructions are now in the email body, not subject
         self.subject_pattern = re.compile(
-            r'^' + re.escape(self.prefix) + r'\s*\[([^\]]+)\]\s*(.+)$',
+            r'^' + re.escape(self.prefix) + r'\s*\[([^\]]+)\]\s*$',
             re.IGNORECASE
         )
     
@@ -35,18 +36,17 @@ class SubjectValidator:
             Tuple of (is_valid, project_name, instructions)
             - is_valid: True if subject matches codemail pattern
             - project_name: Extracted project name if valid
-            - instructions: Instructions part of subject if valid
+            - instructions: Always None (instructions are in email body)
         """
         try:
             # Try primary pattern with prefix (required for codemail requests)
             match = self.subject_pattern.match(subject.strip())
             if match:
                 project_name = match.group(1).strip().lower()
-                instructions = match.group(2).strip()
                 
-                logger.info(f"Valid codemail subject detected: project='{project_name}', instructions='{instructions[:50]}...'")
+                logger.info(f"Valid codemail subject detected: project='{project_name}'")
                 
-                return True, project_name, instructions
+                return True, project_name, None
             
             # No match found - only accept subjects with the required prefix
             logger.debug(f"Subject does not match codemail pattern (missing '{self.prefix}' prefix): '{subject}'")

@@ -75,19 +75,19 @@ python main.py
 The subject line must follow this pattern:
 
 ```
-codemail:[project-name] instructions
+codemail:[project-name]
 ```
 
 Where:
 - `codemail:` - Required prefix (case-insensitive)
-- `[project-name]` - Project name in square brackets  
-- `instructions` - Brief task description
+- `[project-name]` - Project name in square brackets
+- **No instructions** - Instructions are now in the email body only
 
 **Valid Examples:**
 ```
-codemail:[my-web-app] Fix the login button styling
-CODEMAIL:[api-service] Add rate limiting to auth endpoint
-Codemail: [data-pipeline] Optimize ETL process
+codemail:[my-web-app]
+CODEMAIL:[api-service]
+Codemail: [data-pipeline]
 ```
 
 **Invalid Examples (will be ignored):**
@@ -95,11 +95,12 @@ Codemail: [data-pipeline] Optimize ETL process
 [my-project] Fix the bug  # Missing "codemail:" prefix
 codemail my-project Fix   # Missing brackets around project name
 codemail: Fix the bug     # Missing project name in brackets
+codemail:[project] instructions  # Instructions should be in body only
 ```
 
 ### Email Body
 
-The email body should contain detailed instructions for the AI agent. The subject line contains the project name and brief instructions, while the body can provide more context.
+The email body must contain detailed instructions for the AI agent. The subject line contains only the project name, while the body provides all task instructions.
 
 **Basic Example:**
 ```
@@ -123,7 +124,7 @@ Make sure it works on mobile devices too.
 
 ### Complete Email Example
 
-**Subject:** `codemail:[frontend-app] Implement dark mode toggle`
+**Subject:** `codemail:[frontend-app]`
 
 **Body:**
 ```
@@ -153,8 +154,8 @@ export CODEMAIL_PREFIX="task:"
 
 With this configuration, valid subjects would be:
 ```
-task:[project-name] instructions
-TASK:[Project-Name] Instructions
+task:[project-name]
+TASK:[Project-Name]
 ```
 
 For more examples and detailed documentation, see [EXAMPLE_EMAIL.md](EXAMPLE_EMAIL.md).

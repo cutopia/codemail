@@ -4,55 +4,51 @@
 
 The subject line must follow this pattern:
 ```
-codemail:[project-name] instructions
+codemail:[project-name]
 ```
 
 Where:
 - `codemail:` - Required prefix (case-insensitive)
 - `[project-name]` - Project name in square brackets
-- `instructions` - The task or instructions for the AI agent
+- **No instructions** - Instructions are now in the email body only
 
 ## Examples of Valid Subject Lines
 
 ### Basic Example
 ```
-Subject: codemail:[my-web-app] Fix the login button styling
+Subject: codemail:[my-web-app]
 ```
 
-### Complex Instructions
+### With Project Name Only
 ```
-Subject: codemail:[api-service] Add rate limiting to the user authentication endpoint
+Subject: CODEMAIL:[api-service]
 ```
 
-### With Additional Context in Body
+### Case Insensitive
 ```
-Subject: codemail:[data-pipeline] Optimize the ETL process
-
-Please optimize the data pipeline for better performance.
-The main bottleneck is in the transformation stage.
-Consider using batch processing instead of row-by-row processing.
+Subject: Codemail: [data-pipeline]
 ```
 
 ## Examples of Invalid Subject Lines (Will Be Ignored)
 
 ### Missing Prefix
 ```
-Subject: [my-project] Fix the bug  # ❌ Missing "codemail:" prefix
+Subject: [my-project]  # ❌ Missing "codemail:" prefix
 ```
 
 ### Wrong Format
 ```
-Subject: codemail my-project Fix the bug  # ❌ Missing brackets around project name
+Subject: codemail my-project  # ❌ Missing brackets around project name
 ```
 
-### No Project Name
+### Instructions in Subject (Not Allowed)
 ```
-Subject: codemail: Fix the bug  # ❌ Missing project name in brackets
+Subject: codemail:[project] Fix the bug  # ❌ Instructions should be in body only
 ```
 
 ## Email Body
 
-The email body should contain detailed instructions for the AI agent. The subject line contains the project name and brief instructions, while the body can provide more context.
+The email body must contain detailed instructions for the AI agent. The subject line contains only the project name, while the body provides all task instructions.
 
 ### Basic Body
 ```
@@ -78,7 +74,7 @@ Make sure it works on mobile devices too.
 
 ### Subject
 ```
-codemail:[frontend-app] Implement dark mode toggle
+codemail:[frontend-app]
 ```
 
 ### Body
@@ -109,6 +105,6 @@ export CODEMAIL_PREFIX="task:"
 
 With this configuration, valid subjects would be:
 ```
-task:[project-name] instructions
-TASK:[Project-Name] Instructions
+task:[project-name]
+TASK:[Project-Name]
 ```
