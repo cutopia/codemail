@@ -78,9 +78,94 @@ class AgentLoop:
             logger.error(f"Error processing email: {e}")
             return None
     
+    def execute_task_with_progress(self, task_id: str) -> Dict:
+        """
+        Execute a single task from the queue with progress tracking.
+        
+        Args:
+            task_id: Unique identifier of the task to execute
+            
+        Returns:
+            Dictionary with execution results
+        """
+        try:
+            # Get task from queue
+            task = self.queue.get_task(task_id)
+            
+            if not task:
+                logger.error(f"Task {task_id} not found")
+                return {"status": "failed", "error": "Task not found"}
+            
+            logger.info(f"Executing task {task_id}: {task['instructions'][:100]}...")
+            
+            # Update status to running with progress tracking
+            self.queue.update_task_status(
+                task_id=task_id,
+                status="running",
+                started_at=datetime.now()
+            )
+            
+            # Set initial state in Redis
+            if hasattr(self.queue, 'set_task_state'):
+                self.queue.set_task_state(task_id, {
+                    "status": "running",
+                    "message": "Starting execution...",
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            # Execute with LLM and progress tracking
+            result = self.llm.execute_iterative_task_with_progress(
+                task["instructions"],
+                task_id=task_id,
+                progress_callback=self._progress_callback
+            )
+            
+            # Update task with results
+            completed_at = datetime.now()
+            self.queue.update_task_status(
+                task_id=task_id,
+                status=result["status"],
+                completed_at=completed_at,
+                output=result.get("output"),
+                error=result.get("error")
+            )
+            
+            logger.info(f"Task {task_id} completed with status: {result['status']}")
+            
+            # Update final state in Redis
+            if hasattr(self.queue, 'set_task_state'):
+                self.queue.set_task_state(task_id, {
+                    "status": result["status"],
+                    "message": f"Completed: {result.get('output', '')[:100]}",
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error executing task {task_id}: {e}")
+            
+            # Update task status to failed
+            self.queue.update_task_status(
+                task_id=task_id,
+                status="failed",
+                completed_at=datetime.now(),
+                error=str(e)
+            )
+            
+            # Update Redis state for failed task
+            if hasattr(self.queue, 'set_task_state'):
+                self.queue.set_task_state(task_id, {
+                    "status": "failed",
+                    "message": f"Error: {str(e)}",
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            return {"status": "failed", "error": str(e)}
+    
     def execute_task(self, task_id: str) -> bool:
         """
-        Execute a single task from the queue.
+        Execute a single task from the queue with progress tracking.
         
         Args:
             task_id: Unique identifier of the task to execute
@@ -98,15 +183,27 @@ class AgentLoop:
             
             logger.info(f"Executing task {task_id}: {task['instructions'][:100]}...")
             
-            # Update status to running
+            # Update status to running with progress tracking
             self.queue.update_task_status(
                 task_id=task_id,
                 status="running",
                 started_at=datetime.now()
             )
             
-            # Execute with LLM
-            result = self.llm.execute_iterative_task(task["instructions"])
+            # Set initial state in Redis
+            if hasattr(self.queue, 'set_task_state'):
+                self.queue.set_task_state(task_id, {
+                    "status": "running",
+                    "message": "Starting execution...",
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            # Execute with LLM and progress tracking
+            result = self.llm.execute_iterative_task_with_progress(
+                task["instructions"],
+                task_id=task_id,
+                progress_callback=self._progress_callback
+            )
             
             # Update task with results
             completed_at = datetime.now()
@@ -119,6 +216,14 @@ class AgentLoop:
             )
             
             logger.info(f"Task {task_id} completed with status: {result['status']}")
+            
+            # Update final state in Redis
+            if hasattr(self.queue, 'set_task_state'):
+                self.queue.set_task_state(task_id, {
+                    "status": result["status"],
+                    "message": f"Completed: {result.get('output', '')[:100]}",
+                    "timestamp": datetime.now().isoformat()
+                })
             
             # Send report to sender
             if task.get("sender"):
@@ -141,6 +246,39 @@ class AgentLoop:
                 error=str(e)
             )
             
+            # Update Redis state for failed task
+            if hasattr(self.queue, 'set_task_state'):
+                self.queue.set_task_state(task_id, {
+                    "status": "failed",
+                    "message": f"Error: {str(e)}",
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            return False
+    
+    def _progress_callback(self, task_id: str, current_step: int, total_steps: int,
+                          message: str = "") -> bool:
+        """
+        Callback function for progress updates during task execution.
+        
+        Args:
+            task_id: Unique identifier of the task
+            current_step: Current step number
+            total_steps: Total number of steps
+            message: Progress message
+            
+        Returns:
+            True if callback executed successfully, False otherwise
+        """
+        try:
+            # Update progress in Redis
+            if hasattr(self.queue, 'update_task_progress'):
+                self.queue.update_task_progress(task_id, current_step, total_steps, message)
+            
+            logger.debug(f"Task {task_id} progress: {current_step}/{total_steps} - {message}")
+            return True
+        except Exception as e:
+            logger.error(f"Error in progress callback: {e}")
             return False
     
     def process_queue(self, max_tasks: int = None) -> int:

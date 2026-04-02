@@ -1,133 +1,273 @@
-# Codemail Implementation Summary
+# Phase 2 Implementation Summary
 
-## 🎯 Current Status: Phase 1 Complete ✅
+## Overview
 
-The Codemail system has been successfully implemented with all core components working correctly.
+Phase 2 implements an enhanced task queue system with Celery and Redis integration for distributed task processing, real-time progress tracking, and better state management.
 
-## ✅ Implemented Components
+## ✅ Completed Features
 
-### Core Infrastructure
-- **config.py** - Environment variable management and configuration
-- **logger.py** - Centralized logging setup
-- **requirements.txt** - Python dependencies (20+ packages)
+### 1. Enhanced Task Queue (`task_queue.py`)
 
-### Email Processing
-- **email_monitor.py** - IMAP email monitoring with:
-  - Connection to IMAP servers
-  - Unread email search
-  - Email fetching and parsing
-  - Seen flag management
-  - Continuous monitoring loop
+**New Methods:**
+- `set_task_state(task_id, state)` - Set task state in Redis
+- `get_task_state(task_id)` - Get task state from Redis
+- `update_task_progress(task_id, current_step, total_steps, message, status)` - Update progress
+- `get_task_progress(task_id)` - Get progress from Redis
+- `get_queue_stats()` - Get queue statistics (pending, running, completed, failed, stopped)
+- `stop_task(task_id)` - Stop a running task
+- `get_pending_tasks_count()` - Get count of pending tasks
+- `get_running_task()` - Get currently running task
 
-- **email_parser.py** - Email content extraction with:
-  - Project name detection (brackets and headers)
-  - Instructions extraction
-  - Task validation
-  - Support for multiple email formats
+**Enhanced Methods:**
+- `delete_task(task_id)` - Now cleans up Redis state if available
 
-### LLM Integration
-- **llm_interface.py** - LLM endpoint integration with:
-  - OpenAI-compatible API support
-  - LM Studio local server compatibility
-  - Basic task execution
-  - Iterative refinement capability
-  - Connection testing
+### 2. Celery Integration (`celery_app.py`)
 
-### Task Management
-- **task_queue.py** - SQLite-based task queue with:
-  - UUID task identifiers
-  - Status tracking (pending, running, completed, failed)
-  - Persistent storage
-  - Query and update operations
+**Features:**
+- Celery app configuration with Redis broker and backend
+- Task serialization settings
+- Time limit configuration (1 hour max per task)
+- Worker prefetch multiplier set to 1 (single task at a time)
 
-### Reporting
-- **email_reporter.py** - SMTP email sending with:
-  - Task completion reports
-  - HTML and plain text formatting
-  - Error notification emails
-  - Report content formatting
+### 3. Agent Loop Enhancements (`agent_loop.py`)
 
-### Orchestration
-- **agent_loop.py** - Main agent loop that processes tasks from the queue
-- **main.py** - Entry point for the Codemail system
+**New Methods:**
+- `execute_task_with_progress(task_id)` - Execute with progress tracking
+- `_progress_callback(task_id, current_step, total_steps, message)` - Progress callback
 
-## 📋 File Structure
+**Enhanced Methods:**
+- `execute_task(task_id)` - Now uses progress callbacks and Redis state updates
+
+### 4. LLM Interface Updates (`llm_interface.py`)
+
+**New Methods:**
+- `execute_iterative_task_with_progress(instructions, task_id, progress_callback, max_iterations)` - Execute with progress tracking
+
+**Enhanced Methods:**
+- Iterative refinement now includes progress callbacks
+- Progress reported for each step and iteration
+
+### 5. API Server Extensions (`api_server.py`)
+
+**New Endpoints:**
+- `GET /tasks/{task_id}/progress` - Get real-time task progress
+- `PATCH /tasks/{task_id}/stop` - Stop a running task
+
+**Enhanced Endpoints:**
+- `GET /queue/status` - Now includes Redis availability and detailed stats
+
+### 6. Celery Worker (`worker.py`)
+
+**Features:**
+- Task processing with progress tracking
+- Error handling with retry mechanism (max 3 retries)
+- Command-line interface for worker and beat scheduler modes
+
+## 📊 System Architecture
 
 ```
-codemail/
-├── main.py                    # System entry point
-├── agent_loop.py              # Task processing orchestration
-├── email_monitor.py           # IMAP monitoring
-├── email_parser.py            # Email content extraction
-├── llm_interface.py           # LLM integration
-├── task_queue.py              # SQLite-based queue
-├── email_reporter.py          # SMTP reporting
-├── subject_validator.py       # Subject line validation
-├── config.py                  # Configuration management
-├── logger.py                  # Logging setup
-├── test_system.py             # Test suite
-├── requirements.txt           # Dependencies
-├── setup.sh                   # Setup script
-└── .env.example               # Environment template
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Email Monitor │────▶│  Task Queue      │────▶│  Agent Loop     │
+│ (IMAP)          │     │  (SQLite + Redis)│     │  (Agentic)      │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+         │                        │                      │
+         ▼                        ▼                      ▼
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Email Sender  │     │  Task Database   │     │  LLM Interface  │
+│ (SMTP)          │     │  (SQLite)        │     │  (LM Studio)    │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+         │                        ▲                      │
+         ▼                        │                      ▼
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Status API     │     │   Celery Worker  │     │  Progress API   │
+│  (FastAPI)      │     │  (Distributed)   │     │  (Redis)        │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
 ```
+
+## 🔄 Task Status Flow
+
+```
+┌─────────┐     ┌─────────┐     ┌──────────┐
+│ pending │────▶│ running │────▶│ completed│
+└─────────┘     └─────────┘     └──────────┘
+      │              │              ▲
+      │              ▼              │
+      │           ┌─────────┐       │
+      └──────────▶│  failed │───────┘
+                  └─────────┘
+                      │
+                      ▼
+                 ┌─────────┐
+                 │ stopped │
+                 └─────────┘
+```
+
+## 📁 New Files
+
+| File | Description |
+|------|-------------|
+| `celery_app.py` | Celery application configuration with Redis integration |
+| `worker.py` | Celery worker for distributed task processing |
+
+## 🔧 Modified Files
+
+| File | Changes |
+|------|---------|
+| `task_queue.py` | Added Redis state tracking, progress management, and enhanced methods |
+| `agent_loop.py` | Added progress callback support and enhanced execution |
+| `llm_interface.py` | Added progress callback parameter to iterative execution |
+| `api_server.py` | Added new endpoints for task progress and stopping |
+| `requirements.txt` | Updated dependencies |
+
+## 🚀 Usage
+
+### Direct Execution (No Redis Required)
+
+```bash
+source venv/bin/activate
+python main.py
+```
+
+This mode processes one task at a time using SQLite only.
+
+### Celery Worker (With Redis)
+
+```bash
+# Start Redis server
+redis-server
+
+# Start Celery worker
+celery -A celery_app worker --loglevel=info
+```
+
+This mode supports distributed task processing and real-time progress tracking.
+
+### API Server
+
+```bash
+source venv/bin/activate
+python api_server.py
+```
+
+Access documentation at: http://localhost:8000/docs
+
+## 📊 API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | System status |
+| `/tasks` | GET | List all tasks |
+| `/tasks/{task_id}` | GET | Get specific task |
+| `/tasks` | POST | Create new task |
+| `/tasks/{task_id}/status` | PATCH | Update task status |
+| `/tasks/{task_id}/stop` | PATCH | Stop a running task |
+| `/tasks/{task_id}/progress` | GET | Get real-time progress |
+| `/queue/status` | GET | Queue statistics |
+
+## 🎯 Key Features
+
+### 1. Real-Time Progress Tracking (With Redis)
+
+- Track execution progress with step counts
+- Monitor percentage completion
+- View progress messages for each step
+
+### 2. Distributed Task Processing (With Celery)
+
+- Process tasks across multiple workers
+- Handle concurrent task execution
+- Automatic retry on failure
+
+### 3. Graceful Fallback (Without Redis)
+
+- System works with SQLite only if Redis is unavailable
+- Progress tracking disabled but all other features work
+- No errors, just warnings in logs
+
+### 4. Task Management
+
+- Create tasks via email or API
+- Monitor task status and progress
+- Stop running tasks manually
+- View queue statistics
 
 ## 🧪 Testing
 
-Run the comprehensive test suite:
+### Test Without Redis
 
 ```bash
-python test_system.py
+source venv/bin/activate
+python -c "
+from task_queue import create_task_queue
+q = create_task_queue()
+task_id = q.create_task('test', 'Test instructions')
+print(f'Task created: {task_id}')
+stats = q.get_queue_stats()
+print(f'Queue stats: {stats}')
+"
 ```
 
-Tests cover:
-- Subject validation
-- Email parsing
-- Task queue operations
-- LLM interface connectivity
-- Integration of all components
+### Test With Redis
 
-## 🔧 Configuration
+```bash
+# Start Redis
+redis-server &
 
-Environment variables (see `.env.example` for template):
-
-```env
-# Email Configuration
-IMAP_HOST=imap.gmail.com
-SMTP_HOST=smtp.gmail.com
-EMAIL_ADDRESS=your_email@gmail.com
-EMAIL_PASSWORD=your_app_password
-
-# LLM Configuration
-LLM_ENDPOINT=http://127.0.0.1:1234/v1/models
-LLM_API_KEY=dummy_key
-
-# Codemail Settings
-CODEMAIL_PREFIX=codemail:
+# Test task queue with progress tracking
+source venv/bin/activate
+python -c "
+from task_queue import create_task_queue
+q = create_task_queue()
+task_id = q.create_task('test', 'Test instructions')
+q.update_task_progress(task_id, 1, 5, 'Starting...')
+progress = q.get_task_progress(task_id)
+print(f'Progress: {progress}')
+"
 ```
 
-## 📖 Documentation
+## 📚 Documentation
 
-- **README.md** - Overview and quick reference
-- **SETUP_GUIDE.md** - Detailed setup instructions
-- **SUBJECT_VALIDATION.md** - Subject format documentation
-- **AGENTS.md** - Project philosophy and guidelines
-- **EXAMPLE_EMAIL.md** - Email template examples
+- **[PHASE_2.md](PHASE_2.md)** - Detailed Phase 2 documentation
+- **[PHASE_2_SETUP.md](PHASE_2_SETUP.md)** - Setup guide for Phase 2
+- **[README.md](README.md)** - Main project README
 
-## 🚀 Next Steps
+## 🔜 Next Steps (Phase 3)
 
-### Phase 2: Enhanced Task Management
-- Celery integration for distributed task processing
-- Redis for state management
-- Concurrent task execution support
-
-### Phase 3: Monitoring & Analytics
-- Web dashboard for queue status
-- Task history and analytics
-- Performance metrics
+- [ ] Bash command execution capability
+- [ ] Project context awareness
+- [ ] Concurrent task processing (multiple workers)
+- [ ] Task priority queue
+- [ ] Task history analytics
 
 ## 📝 Notes
 
-- All components are designed to work together seamlessly
-- The system processes one task at a time (single-task mode)
-- Email validation ensures only properly formatted requests are processed
-- Comprehensive logging helps with debugging and monitoring
+1. **Redis is optional** - System works without it but with limited functionality
+2. **Celery requires Redis** - For distributed task processing, Redis must be available
+3. **Backward compatible** - Existing code continues to work without changes
+4. **Graceful degradation** - When Redis is unavailable, system falls back to SQLite mode
+
+## 🐛 Known Issues
+
+1. Progress tracking shows warnings when Redis isn't available (expected behavior)
+2. No automatic task cleanup for old completed tasks (can be added in Phase 3)
+
+## ✅ Verification Checklist
+
+- [x] Task queue with SQLite storage
+- [x] Celery app configuration
+- [x] Worker script for distributed processing
+- [x] Progress tracking with Redis
+- [x] API endpoints for task management
+- [x] Email monitoring integration
+- [x] Agent loop with progress callbacks
+- [x] LLM interface with progress support
+- [x] Graceful fallback without Redis
+- [x] Documentation and setup guides
+
+## 🎉 Phase 2 Complete!
+
+The enhanced task queue system is now ready for use. Users can choose between:
+1. Simple single-task mode (no Redis required)
+2. Distributed processing mode (with Redis and Celery)
+
+All features are working correctly with graceful fallback when optional components are unavailable.

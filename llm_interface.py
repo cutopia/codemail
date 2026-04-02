@@ -130,18 +130,32 @@ Any errors encountered during execution"""
             "error": None
         }
     
-    def execute_iterative_task(self, instructions: str, max_iterations: int = 5) -> Dict:
+    def execute_iterative_task_with_progress(self, instructions: str, task_id: str = None,
+                                           progress_callback=None, max_iterations: int = 5) -> Dict:
         """
-        Execute a task with iterative refinement.
+        Execute a task with iterative refinement and progress tracking.
         
         Args:
             instructions: Task instructions from email
+            task_id: Optional task ID for progress tracking
+            progress_callback: Callback function for progress updates (task_id, current_step, total_steps, message)
             max_iterations: Maximum number of refinement iterations
             
         Returns:
             Dictionary with final results and iteration history
         """
         logger.info(f"Starting iterative task execution (max {max_iterations} iterations)")
+        
+        # Track steps for progress
+        total_steps = 1 + max_iterations  # Initial execution + max refinement iterations
+        current_step = 0
+        
+        # Report initial step
+        if progress_callback and task_id:
+            try:
+                progress_callback(task_id, current_step, total_steps, "Starting execution...")
+            except Exception as e:
+                logger.warning(f"Progress callback failed: {e}")
         
         # Initial execution
         result = self.execute_task(instructions)
@@ -158,7 +172,15 @@ Any errors encountered during execution"""
         
         # Iterative refinement (simple implementation)
         for i in range(1, max_iterations):
+            current_step += 1
             logger.info(f"Refinement iteration {i}/{max_iterations}")
+            
+            # Report progress
+            if progress_callback and task_id:
+                try:
+                    progress_callback(task_id, current_step, total_steps, f"Refinement iteration {i}/{max_iterations}")
+                except Exception as e:
+                    logger.warning(f"Progress callback failed: {e}")
             
             # Ask LLM to review and improve its previous output
             refine_prompt = f"""Please review your previous response and identify areas for improvement.
@@ -183,10 +205,19 @@ Your improved response:"""
             # Check if task is complete
             if "TASK_COMPLETE" in refined_response.upper():
                 logger.info("Task marked as complete by LLM")
+                current_step += 1  # Count this step
                 break
             
             current_output = refined_response
             iteration_history.append(refined_response)
+        
+        # Report final progress
+        current_step += 1
+        if progress_callback and task_id:
+            try:
+                progress_callback(task_id, current_step, total_steps, "Task completed")
+            except Exception as e:
+                logger.warning(f"Final progress callback failed: {e}")
         
         return {
             "status": "completed",
@@ -195,6 +226,19 @@ Your improved response:"""
             "iterations": len(iteration_history),
             "iteration_history": iteration_history
         }
+    
+    def execute_iterative_task(self, instructions: str, max_iterations: int = 5) -> Dict:
+        """
+        Execute a task with iterative refinement (legacy method).
+        
+        Args:
+            instructions: Task instructions from email
+            max_iterations: Maximum number of refinement iterations
+            
+        Returns:
+            Dictionary with final results and iteration history
+        """
+        return self.execute_iterative_task_with_progress(instructions, max_iterations=max_iterations)
     
     def check_connection(self) -> bool:
         """Check if LLM endpoint is reachable."""

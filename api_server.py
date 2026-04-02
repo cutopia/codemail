@@ -169,15 +169,17 @@ async def delete_task(task_id: str):
 
 @app.get("/queue/status")
 async def get_queue_status():
-    """Get queue statistics."""
+    """Get queue statistics including Redis state if available."""
     try:
+        # Get SQLite stats
         all_tasks = task_queue.get_all_tasks()
         
         status_counts = {
             'pending': 0,
             'running': 0,
             'completed': 0,
-            'failed': 0
+            'failed': 0,
+            'stopped': 0
         }
         
         for task in all_tasks:
@@ -185,14 +187,84 @@ async def get_queue_status():
             if status in status_counts:
                 status_counts[status] += 1
         
+        # Get Redis stats if available
+        redis_stats = {}
+        if hasattr(task_queue, 'get_queue_stats'):
+            try:
+                redis_stats = task_queue.get_queue_stats()
+            except Exception as e:
+                logger.warning(f"Failed to get Redis queue stats: {e}")
+        
         return {
             "total_tasks": len(all_tasks),
             "pending": status_counts['pending'],
             "running": status_counts['running'],
             "completed": status_counts['completed'],
-            "failed": status_counts['failed']
+            "failed": status_counts['failed'],
+            "stopped": status_counts['stopped'],
+            "redis_available": hasattr(task_queue, 'redis') and task_queue.redis is not None,
+            **redis_stats
         }
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/tasks/{task_id}/progress")
+async def get_task_progress(task_id: str):
+    """Get real-time progress for a specific task."""
+    try:
+        # Get SQLite task data
+        task = task_queue.get_task(task_id)
+        
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+        
+        # Get Redis progress data if available
+        progress_data = {}
+        if hasattr(task_queue, 'get_task_progress'):
+            try:
+                progress_data = task_queue.get_task_progress(task_id) or {}
+            except Exception as e:
+                logger.warning(f"Failed to get task progress: {e}")
+        
+        return {
+            "task": task,
+            "progress": progress_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/tasks/{task_id}/stop")
+async def stop_task(task_id: str):
+    """Stop a running task."""
+    try:
+        # Check if task exists and is running
+        task = task_queue.get_task(task_id)
+        
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+        
+        if task['status'] != 'running':
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot stop task with status: {task['status']}. Only running tasks can be stopped."
+            )
+        
+        # Stop the task
+        stopped = task_queue.stop_task(task_id)
+        
+        if not stopped:
+            raise HTTPException(status_code=500, detail="Failed to stop task")
+        
+        return {"message": f"Task {task_id} has been stopped"}
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
