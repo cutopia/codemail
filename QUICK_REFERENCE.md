@@ -77,13 +77,7 @@ python main.py
 ## 🔍 Testing
 
 ```bash
-# Test subject validation
-python test_subject_validator.py
-
-# Test email filtering
-python test_email_filtering.py
-
-# Full system test
+# Full system test (includes all components)
 python test_system.py
 ```
 

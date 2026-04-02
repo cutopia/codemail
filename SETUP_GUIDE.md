@@ -2,22 +2,41 @@
 
 ## Quick Start
 
-1. **Install Dependencies**
-   ```bash
-   ./setup.sh
-   ```
+Get up and running with Codemail in 5 minutes.
 
-2. **Configure Environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your credentials
-   ```
+### Step 1: Install Dependencies
 
-3. **Start the System**
-   ```bash
-   source venv/bin/activate
-   python main.py
-   ```
+```bash
+./setup.sh
+```
+
+This will:
+- Create a virtual environment
+- Install all Python dependencies
+- Set up the project structure
+
+### Step 2: Configure Your Credentials
+
+Edit `.env` with your email and LLM settings:
+
+```env
+# Email Configuration (Gmail example)
+IMAP_HOST=imap.gmail.com
+SMTP_HOST=smtp.gmail.com
+EMAIL_ADDRESS=your_email@gmail.com
+EMAIL_PASSWORD=your_app_password
+
+# LLM Configuration (LM Studio)
+LLM_ENDPOINT=http://127.0.0.1:1234/v1/models
+LLM_API_KEY=dummy_key
+```
+
+### Step 3: Start the System
+
+```bash
+source venv/bin/activate
+python main.py
+```
 
 ## Detailed Configuration
 
@@ -28,170 +47,86 @@
 2. Generate an App Password:
    - Go to Google Account settings
    - Security → 2-Step Verification → App passwords
-   - Select "Mail" and your device
-   - Copy the generated password
-3. Update `.env`:
-   ```
-   EMAIL_ADDRESS=your_email@gmail.com
-   EMAIL_PASSWORD=your_app_password
-   ```
+3. Use the app password in your `.env` file (not your regular password)
 
 #### For Other Email Providers:
-- **Outlook/Hotmail**: `imap-mail.outlook.com`, `smtp-mail.outlook.com`
-- **Yahoo**: `imap.mail.yahoo.com`, `smtp.mail.yahoo.com`
-- Check your provider's IMAP/SMTP settings documentation
+- Outlook/Hotmail: `outlook.office365.com`
+- Yahoo Mail: `imap.mail.yahoo.com`
+- Custom IMAP server: Use your provider's settings
 
-### LLM Setup (LM Studio)
+### LLM Setup
 
-1. **Install LM Studio**
-   - Download from [lmstudio.ai](https://lmstudio.ai/)
-   - Install and launch the application
+#### LM Studio (Recommended for Local Development)
+1. Download and install [LM Studio](https://lmstudio.ai/)
+2. Load a model (e.g., Llama 3, Mistral)
+3. Start the local server on port 1234
+4. The endpoint will be: `http://127.0.0.1:1234/v1/models`
 
-2. **Download a Model**
-   - Open LM Studio
-   - Go to "Model Hub"
-   - Select a model (recommended: Llama-3-8B, Mistral-7B)
-   - Click "Download"
+#### Using a Remote API
+If you prefer to use a remote API (OpenAI, etc.):
 
-3. **Start Local Server**
-   - Load your downloaded model
-   - Click "Server" tab
-   - Click "Start Server"
-   - Default endpoint: `http://127.0.0.1:1234/v1/models`
+```env
+LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
+LLM_API_KEY=sk-your-api-key-here
+```
 
-4. **Configure Codemail**
-   ```
-   LLM_ENDPOINT=http://127.0.0.1:1234/v1/models
-   LLM_API_KEY=dummy_key  # LM Studio doesn't require real API key locally
-   ```
+### Subject Validation
 
-### Testing the Setup
+All codemail requests must follow this pattern:
 
-#### Test Email Parser:
+```
+codemail:[project-name] instructions
+```
+
+Examples:
+- ✅ `codemail:[my-project] Fix login bug`
+- ✅ `CODEMAIL:[api-service] Add rate limiting`
+- ❌ `[my-project] Fix bug` (missing prefix)
+
+You can customize the prefix by setting `CODEMAIL_PREFIX` in your `.env` file.
+
+## Testing Your Setup
+
+After configuration, run the test suite:
+
 ```bash
-python -c "
-from email_parser import create_email_parser
-parser = create_email_parser()
-email = {'subject': '[test] hello', 'body': 'world'}
-print(parser.parse_email(email))
-"
+source venv/bin/activate
+python test_system.py
 ```
 
-#### Test Task Queue:
-```bash
-python -c "
-from task_queue import create_task_queue
-queue = create_task_queue()
-task_id = queue.create_task('test', 'test instructions')
-print(f'Created task: {task_id}')
-tasks = queue.get_all_tasks()
-print(f'Total tasks: {len(tasks)}')
-"
-```
-
-#### Test LLM Connection:
-```bash
-python -c "
-from llm_interface import create_llm_interface
-llm = create_llm_interface()
-print('Connected:', llm.check_connection())
-"
-```
-
-## Usage Examples
-
-### Sending a Task Email
-
-**Subject:** `[my-project] Implement a feature`
-
-**Body:**
-```
-Project: my-project
-
-Please implement a function that:
-1. Takes a list of numbers as input
-2. Returns the sum of all even numbers
-3. Handles edge cases like empty lists
-4. Includes unit tests
-```
-
-Or simply use brackets in subject:
-```
-[my-project] Create a Python script to calculate Fibonacci sequence
-```
-
-### Checking Task Status
-
-```python
-from task_queue import create_task_queue
-
-queue = create_task_queue()
-
-# Get all tasks
-all_tasks = queue.get_all_tasks()
-for task in all_tasks:
-    print(f"Task {task['id'][:8]}...: {task['status']}")
-
-# Get specific task
-task = queue.get_task("your-task-id")
-print(f"Output: {task['output']}")
-```
+This will verify:
+- Email parser functionality
+- Subject validation
+- Task queue operations
+- LLM interface connectivity
 
 ## Troubleshooting
 
-### Email Connection Issues
-- Verify IMAP/SMTP settings are correct
-- Check that app password is generated correctly
-- Ensure "Less secure app access" is enabled if needed
-- Test with `python -c "import imaplib; ..."` manually
+### Email Not Being Received
+
+1. Verify IMAP settings in `.env`
+2. Check that app password is correct (not regular password)
+3. Ensure IMAP is enabled in your email account settings
+4. Check logs for connection errors
 
 ### LLM Connection Issues
-- Verify LM Studio server is running
-- Check endpoint URL matches LM Studio configuration
-- Ensure no firewall blocking localhost connections
-- Test with curl: `curl http://127.0.0.1:1234/v1/models`
 
-### Database Errors
-- Delete `tasks.db` to reset database
-- Ensure write permissions in current directory
-- Check SQLite is installed: `python -c "import sqlite3"`
+1. Verify LM Studio server is running on port 1234
+2. Test endpoint: `curl http://127.0.0.1:1234/v1/models`
+3. Check `LLM_ENDPOINT` in `.env` matches your setup
+4. For remote APIs, verify API key is correct
 
-## Advanced Configuration
+### Tasks Not Executing
 
-### Changing Poll Interval
-Edit `main.py`:
-```python
-monitor.monitor_loop(callback=email_callback, poll_interval=30)  # Check every 30 seconds
-```
-
-### Using PostgreSQL Instead of SQLite
-Update `.env`:
-```
-DATABASE_URL=postgresql://user:password@localhost/codemail
-```
-
-### Running with Celery (Future Enhancement)
-```bash
-# Start Redis
-redis-server
-
-# Start Celery worker
-celery -A task_queue.celery_app worker --loglevel=info
-
-# Start main application
-python main.py
-```
+1. Check agent loop is running (look for "Starting agent loop" in logs)
+2. Verify task queue has pending tasks
+3. Check LLM connection and response times
+4. Review error messages in logs
 
 ## Next Steps
 
-1. **Phase 2**: Add more sophisticated email parsing
-2. **Phase 3**: Implement bash command execution
-3. **Phase 4**: Add Celery for concurrent task processing
-4. **Phase 5**: Create REST API for status monitoring
-
-## Support
-
-For issues or questions:
-- Check logs in `logs/codemail.log`
-- Review error messages in console output
-- Test individual components before full integration
+After setup is complete:
+1. Send a test email with the correct subject format
+2. Monitor logs for task processing
+3. Review the generated reports
+4. Customize configuration as needed

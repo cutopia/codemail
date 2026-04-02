@@ -119,11 +119,8 @@ else:
 Run the subject validation tests:
 
 ```bash
-# Test subject validator directly
-python test_subject_validator.py
-
-# Test email filtering with full pipeline
-python test_email_filtering.py
+# Run all system tests (includes subject validation)
+python test_system.py
 ```
 
 ## Migration Guide
@@ -157,7 +154,7 @@ Body: Please fix the login button styling on the homepage.
 1. Check subject line format matches `codemail:[project-name] instructions`
 2. Verify prefix is correct (default: `codemail:`)
 3. Check logs for validation errors
-4. Test with `test_email_filtering.py`
+4. Test with `python test_system.py`
 
 ### Custom Prefix Not Working
 
