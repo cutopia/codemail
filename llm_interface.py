@@ -31,8 +31,11 @@ class LLMInterface:
             LLM response text or None if error
         """
         try:
+            # Ensure endpoint has correct path format
+            endpoint = self.endpoint.rstrip('/')
+            
             # LM Studio OpenAI-compatible endpoint
-            url = f"{self.endpoint}/chat/completions"
+            url = f"{endpoint}/chat/completions"
             
             headers = {
                 "Content-Type": "application/json",

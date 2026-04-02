@@ -21,3 +21,6 @@ python-dateutil>=2.8.2
 
 # Email processing
 imaplib2>=3.7  # IMAP email monitoring
+
+# Monitoring and health checks
+psutil>=5.9.0  # System monitoring

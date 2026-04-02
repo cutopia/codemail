@@ -81,8 +81,14 @@ class TaskQueue:
                     started_at TIMESTAMP,
                     completed_at TIMESTAMP,
                     output TEXT,
-                    error TEXT
+                    error TEXT,
+                    priority INTEGER DEFAULT 0
                 )
+            ''')
+            
+            # Create index for priority-based queries
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority DESC)
             ''')
             
             conn.commit()
@@ -94,7 +100,8 @@ class TaskQueue:
             logger.error(f"Error creating task tables: {e}")
             raise
     
-    def create_task(self, project_name: str, instructions: str, sender: str = None) -> str:
+    def create_task(self, project_name: str, instructions: str, sender: str = None,
+                   priority: int = 0) -> str:
         """
         Create a new task in the queue.
         
@@ -102,6 +109,7 @@ class TaskQueue:
             project_name: Name of the project to work on
             instructions: Task instructions from email
             sender: Email sender address
+            priority: Task priority (higher = more urgent, default 0)
             
         Returns:
             Unique task ID
@@ -114,14 +122,14 @@ class TaskQueue:
             cursor = conn.cursor()
             
             cursor.execute('''
-                INSERT INTO tasks (id, project_name, instructions, status, sender, created_at)
-                VALUES (?, ?, ?, 'pending', ?, ?)
-            ''', (task_id, project_name, instructions, sender, created_at))
+                INSERT INTO tasks (id, project_name, instructions, status, sender, created_at, priority)
+                VALUES (?, ?, ?, 'pending', ?, ?, ?)
+            ''', (task_id, project_name, instructions, sender, created_at, priority))
             
             conn.commit()
             conn.close()
             
-            logger.info(f"Created task {task_id} for project '{project_name}'")
+            logger.info(f"Created task {task_id} for project '{project_name}' with priority {priority}")
             
             return task_id
             
@@ -129,10 +137,13 @@ class TaskQueue:
             logger.error(f"Error creating task: {e}")
             raise
     
-    def get_pending_task(self) -> Optional[Dict]:
+    def get_pending_task(self, priority_only: bool = False) -> Optional[Dict]:
         """
         Get the next pending task from the queue.
         
+        Args:
+            priority_only: If True, only return high-priority tasks (priority > 0)
+            
         Returns:
             Task dictionary or None if no pending tasks
         """
@@ -140,13 +151,23 @@ class TaskQueue:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute('''
-                SELECT id, project_name, instructions, sender, created_at
-                FROM tasks
-                WHERE status = 'pending'
-                ORDER BY created_at ASC
-                LIMIT 1
-            ''')
+            # Build query with optional priority filter
+            if priority_only:
+                cursor.execute('''
+                    SELECT id, project_name, instructions, sender, created_at, priority
+                    FROM tasks
+                    WHERE status = 'pending' AND priority > 0
+                    ORDER BY priority DESC, created_at ASC
+                    LIMIT 1
+                ''')
+            else:
+                cursor.execute('''
+                    SELECT id, project_name, instructions, sender, created_at, priority
+                    FROM tasks
+                    WHERE status = 'pending'
+                    ORDER BY priority DESC, created_at ASC
+                    LIMIT 1
+                ''')
             
             row = cursor.fetchone()
             conn.close()
@@ -157,7 +178,8 @@ class TaskQueue:
                     "project_name": row[1],
                     "instructions": row[2],
                     "sender": row[3],
-                    "created_at": row[4]
+                    "created_at": row[4],
+                    "priority": row[5] if len(row) > 5 else 0
                 }
             
             return None
@@ -246,7 +268,7 @@ class TaskQueue:
             
             cursor.execute('''
                 SELECT id, project_name, instructions, status, sender,
-                       created_at, started_at, completed_at, output, error
+                       created_at, started_at, completed_at, output, error, priority
                 FROM tasks WHERE id = ?
             ''', (task_id,))
             
@@ -264,7 +286,8 @@ class TaskQueue:
                     "started_at": row[6],
                     "completed_at": row[7],
                     "output": row[8],
-                    "error": row[9]
+                    "error": row[9],
+                    "priority": row[10] if len(row) > 10 else 0
                 }
             
             return None

@@ -9,6 +9,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from task_queue import create_task_queue
+from monitoring import create_monitor, create_health_check_api
 
 app = FastAPI(
     title="Codemail API",
@@ -16,8 +17,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Create task queue instance
+# Create instances
 task_queue = create_task_queue()
+monitor = create_monitor()
+health_api = create_health_check_api()
 
 
 class TaskResponse(BaseModel):
@@ -265,6 +268,40 @@ async def stop_task(task_id: str):
         
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/health/status")
+async def get_health_status():
+    """Get comprehensive system health status."""
+    try:
+        return monitor.get_system_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/health/ready")
+async def get_ready_status():
+    """Get readiness status for Kubernetes-style probes."""
+    try:
+        return health_api.get_ready_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """Get system metrics and statistics."""
+    try:
+        queue_stats = task_queue.get_queue_stats()
+        agent_metrics = monitor.get_metrics()
+        
+        return {
+            "queue": queue_stats,
+            "tasks": agent_metrics,
+            "timestamp": datetime.now().isoformat()
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
