@@ -5,6 +5,12 @@ Extracts project name and instructions from email content.
 
 import re
 import logging
+import os
+from dotenv import load_dotenv
+from subject_validator import create_subject_validator
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger("codemail.email_parser")
 
@@ -12,9 +18,16 @@ logger = logging.getLogger("codemail.email_parser")
 class EmailParser:
     """Parser for extracting task information from emails."""
     
-    def __init__(self):
+    def __init__(self, prefix: str = None):
         # Default project name if not specified in email
         self.default_project = "default"
+        
+        # Get prefix from environment or use default
+        if prefix is None:
+            prefix = os.getenv("CODEMAIL_PREFIX", "codemail:")
+        
+        # Subject validator to check if email is a codemail request
+        self.subject_validator = create_subject_validator(prefix)
         
     def parse_email(self, email_data):
         """
@@ -28,13 +41,19 @@ class EmailParser:
         """
         try:
             subject = email_data.get("subject", "")
+            
+            # Check if this is a valid codemail request
+            is_codemail, project_name, instructions = self.subject_validator.validate_subject(subject)
+            
+            if not is_codemail:
+                logger.warning(f"Email subject does not match codemail pattern: '{subject}'")
+                return None
+            
             body = email_data.get("body", "")
             
-            # Extract project name from subject or body
-            project_name = self._extract_project_name(subject, body)
-            
-            # Extract instructions (main content after any headers/commands)
-            instructions = self._extract_instructions(body)
+            # If instructions weren't extracted from subject, try to get them from body
+            if not instructions or instructions.strip() == "":
+                instructions = self._extract_instructions_from_body(body)
             
             return {
                 "project_name": project_name,
@@ -63,8 +82,8 @@ class EmailParser:
         logger.info("No project name found in email, using 'default'")
         return self.default_project
     
-    def _extract_instructions(self, body):
-        """Extract instructions from email body."""
+    def _extract_instructions_from_body(self, body):
+        """Extract instructions from email body when not in subject."""
         lines = body.split('\n')
         instructions_lines = []
         
@@ -96,11 +115,6 @@ class EmailParser:
         # Join remaining lines as instructions
         instructions = '\n'.join(instructions_lines).strip()
         
-        # If no instructions found, use the entire body
-        if not instructions:
-            logger.warning("No clear instructions found in email body")
-            return body.strip()
-        
         return instructions
     
     def validate_task(self, parsed_data):
@@ -125,6 +139,6 @@ class EmailParser:
         return True, None
 
 
-def create_email_parser():
+def create_email_parser(prefix: str = None):
     """Factory function to create email parser."""
-    return EmailParser()
+    return EmailParser(prefix)

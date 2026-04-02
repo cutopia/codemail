@@ -70,25 +70,94 @@ python main.py
 
 ## 📧 Email Format
 
-Send an email with instructions:
+### Subject Line Pattern
 
-**Subject:** `[my-project] Implement a feature`
+The subject line must follow this pattern:
+
+```
+codemail:[project-name] instructions
+```
+
+Where:
+- `codemail:` - Required prefix (case-insensitive)
+- `[project-name]` - Project name in square brackets  
+- `instructions` - Brief task description
+
+**Valid Examples:**
+```
+codemail:[my-web-app] Fix the login button styling
+CODEMAIL:[api-service] Add rate limiting to auth endpoint
+Codemail: [data-pipeline] Optimize ETL process
+```
+
+**Invalid Examples (will be ignored):**
+```
+[my-project] Fix the bug  # Missing "codemail:" prefix
+codemail my-project Fix   # Missing brackets around project name
+codemail: Fix the bug     # Missing project name in brackets
+```
+
+### Email Body
+
+The email body should contain detailed instructions for the AI agent. The subject line contains the project name and brief instructions, while the body can provide more context.
+
+**Basic Example:**
+```
+Fix the login button styling on the homepage.
+The button should be blue with white text.
+Make sure it works on mobile devices too.
+```
+
+**Structured Instructions:**
+```
+# Task: Fix login button
+
+## Project: my-web-app
+
+## Instructions:
+1. Locate the login button in `src/components/Header.js`
+2. Update the styling to use the new color scheme
+3. Test on Chrome, Firefox, and Safari
+4. Run unit tests before committing
+```
+
+### Complete Email Example
+
+**Subject:** `codemail:[frontend-app] Implement dark mode toggle`
 
 **Body:**
 ```
-Project: my-project
+Please implement a dark mode toggle feature for our frontend application.
 
-Please implement a function that:
-1. Takes a list of numbers as input
-2. Returns the sum of all even numbers  
-3. Handles edge cases like empty lists
-4. Includes unit tests
+Requirements:
+1. Add a toggle button in the header component
+2. Store user preference in localStorage
+3. Apply dark theme class to body element when enabled
+4. Use CSS variables for theme colors
+
+Files to modify:
+- src/components/Header.js
+- src/styles/theme.css
+- src/utils/storage.js
+
+Test the feature in Chrome and Firefox before submitting.
 ```
 
-Or simply use brackets in subject:
+### Configuration
+
+You can customize the prefix by setting the `CODEMAIL_PREFIX` environment variable:
+
+```bash
+export CODEMAIL_PREFIX="task:"
 ```
-[my-project] Create a Python script to calculate Fibonacci sequence
+
+With this configuration, valid subjects would be:
 ```
+task:[project-name] instructions
+TASK:[Project-Name] Instructions
+```
+
+For more examples and detailed documentation, see [EXAMPLE_EMAIL.md](EXAMPLE_EMAIL.md).
 
 ## 🌐 REST API
 

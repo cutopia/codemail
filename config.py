@@ -27,6 +27,9 @@ class EmailConfig:
                 password = password[1:-1]
         self.email_password = password
         
+        # Codemail subject prefix
+        self.codemail_prefix = os.getenv("CODEMAIL_PREFIX", "codemail:")
+        
     def validate(self):
         """Validate that required email configuration is present."""
         if not all([self.email_address, self.email_password]):

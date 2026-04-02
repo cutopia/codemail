@@ -18,8 +18,16 @@ logger = logging.getLogger("codemail.agent_loop")
 class AgentLoop:
     """Main agent loop that processes tasks from the queue."""
     
-    def __init__(self):
-        self.parser = create_email_parser()
+    def __init__(self, parser_prefix: str = None):
+        # Get prefix from environment if not provided
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        if parser_prefix is None:
+            parser_prefix = os.getenv("CODEMAIL_PREFIX", "codemail:")
+        
+        self.parser = create_email_parser(parser_prefix)
         self.llm = create_llm_interface()
         self.queue = create_task_queue()
         self.reporter = create_email_reporter()
@@ -39,6 +47,10 @@ class AgentLoop:
             
             # Parse email content
             parsed_data = self.parser.parse_email(email_data)
+            
+            if parsed_data is None:
+                logger.warning("Email does not match codemail pattern - ignoring")
+                return None
             
             if not parsed_data:
                 logger.error("Failed to parse email")
@@ -197,6 +209,6 @@ class AgentLoop:
                 time.sleep(poll_interval)
 
 
-def create_agent_loop():
+def create_agent_loop(parser_prefix: str = None):
     """Factory function to create agent loop."""
-    return AgentLoop()
+    return AgentLoop(parser_prefix)
