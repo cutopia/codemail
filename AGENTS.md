@@ -1,6 +1,7 @@
 # Codemail Project Plan
 
 ## Philosophy: Simplicity and Clarity
+
 **Keep the project clean, simple, and focused.** As features are added, resist the urge to overcomplicate the structure. A clean project structure enables:
 - Faster development and debugging
 - Easier onboarding for new contributors
@@ -10,6 +11,7 @@
 When adding functionality, ask: "Can this be integrated into existing files?" or "Is this complexity truly necessary?" Remove obsolete code and documentation regularly.
 
 ## Overview
+
 Codemail is a system that allows users to control a self-hosted LLM and coding agent remotely by sending emails with instructions. The system monitors incoming emails, processes tasks in an agentic loop, and reports back via email.
 
 ## Tech Stack
@@ -22,8 +24,8 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 - **Redis** - In-memory data structure store for task queues and state
 
 ### LLM Integration
-- **LangChain/LlamaIndex** - LLM orchestration frameworks
-- **Local LLM server** LLM is hosted locally with LM Studio on the same machine that will be running codemail. Address is: http://127.0.0.1:1234/v1/models (openai api style)
+- **Local LLM server** - LM Studio hosted locally at `http://127.0.0.1:1234/v1/models` (OpenAI API style)
+- **Requests** - HTTP client for LLM communication
 - **Pydantic** - Data validation using Python type annotations
 
 ### Email Processing
@@ -40,13 +42,13 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │   Email Monitor │────▶│  Task Queue      │────▶│  Agent Loop     │
-│ (IMAP)          │     │  (Celery/Redis)  │     │  (Agentic)      │
+│ (IMAP)          │     │  (SQLite/PG)     │     │  (Agentic)      │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
          │                        │                      │
          ▼                        ▼                      ▼
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │   Email Sender  │     │  Task Database   │     │  LLM Interface  │
-│ (SMTP)          │     │  (SQLite/PG)     │     │  (LangChain)    │
+│ (SMTP)          │     │  (tasks.db)      │     │  (LM Studio)    │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
          │
          ▼
@@ -94,14 +96,14 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 3. **Incremental Complexity**: Add features like queue management, concurrency, etc., one at a time
 4. **Test Each Component**: Verify functionality before moving to next phase
 
-### Phase 1: Core Email Processing
+### Phase 1: Core Email Processing ✅ COMPLETE
 - Set up basic email monitoring (IMAP)
 - Parse incoming emails for instructions
 - Implement simple LLM call interface
 - Send completion reports via SMTP
 - **Runnability**: Can receive an email, process it, and send a report
 
-### Phase 2: Task Queue Foundation
+### Phase 2: Task Queue Foundation 🔄 IN PROGRESS
 - Add database storage for tasks
 - Implement basic task queuing (FIFO)
 - Add unique task IDs
@@ -127,7 +129,7 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 3. **Configuration Over Code**: Use environment variables for configuration (email credentials, LLM endpoints)
 4. **Error Handling**: Implement robust error handling for email parsing and task execution
 5. **Logging**: Maintain comprehensive logging for debugging and monitoring
-6. **Security**: Never commit sensitive credentials; use .env files with gitignore
+6. **Security**: Never commit sensitive credentials; use `.env` files with gitignore
 7. **Documentation**: Update documentation as features are added
 
 ## Project Structure Guidelines
@@ -152,9 +154,11 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 
 - Email server credentials (IMAP/SMTP)
 - LLM endpoint URL and API key/token
-- Queue backend connection (Redis)
+- Queue backend connection (Redis - optional for Phase 1)
 - Database connection string
 
 ## Future Enhancements
 - Dashboard for real-time monitoring
 - Task history and analytics
+- Enhanced email parsing with structured instructions
+- Multi-agent support for complex projects

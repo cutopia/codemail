@@ -11,7 +11,7 @@ Codemail is a system that allows you to control a self-hosted LLM and coding age
 - 📧 **Email reports** - Get completion reports sent back to your inbox
 - 🌐 **REST API** - Monitor and manage tasks via web interface
 
-## 🚀 Quick Start
+## 🚀 Quick Start (5 minutes)
 
 ### 1. Install Dependencies
 
@@ -42,37 +42,9 @@ source venv/bin/activate
 python main.py
 ```
 
-## 📖 Detailed Documentation
-
-- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Comprehensive setup instructions
-- **[PROJECT_STATUS.md](PROJECT_STATUS.md)** - Current development status and roadmap
-
-## 🎯 How It Works
-
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Email Monitor │────▶│  Task Queue      │────▶│  Agent Loop     │
-│ (IMAP)          │     │  (SQLite)        │     │  (Agentic)      │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-         │                        │                      │
-         ▼                        ▼                      ▼
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Email Sender  │     │  Task Database   │     │  LLM Interface  │
-│ (SMTP)          │     │  (tasks.db)      │     │  (LM Studio)    │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Status API     │
-│  (FastAPI)      │
-└─────────────────┘
-```
-
 ## 📧 Email Format
 
 ### Subject Line Pattern
-
-The subject line must follow this pattern:
 
 ```
 codemail:[project-name]
@@ -81,7 +53,7 @@ codemail:[project-name]
 Where:
 - `codemail:` - Required prefix (case-insensitive)
 - `[project-name]` - Project name in square brackets
-- **No instructions** - Instructions are now in the email body only
+- **No instructions** - Instructions are in the email body only
 
 **Valid Examples:**
 ```
@@ -90,43 +62,11 @@ CODEMAIL:[api-service]
 Codemail: [data-pipeline]
 ```
 
-**Invalid Examples (will be ignored):**
-```
-[my-project] Fix the bug  # Missing "codemail:" prefix
-codemail my-project Fix   # Missing brackets around project name
-codemail: Fix the bug     # Missing project name in brackets
-codemail:[project] instructions  # Instructions should be in body only
-```
-
 ### Email Body
 
-The email body must contain detailed instructions for the AI agent. The subject line contains only the project name, while the body provides all task instructions.
+The email body must contain detailed instructions for the AI agent.
 
-**Basic Example:**
-```
-Fix the login button styling on the homepage.
-The button should be blue with white text.
-Make sure it works on mobile devices too.
-```
-
-**Structured Instructions:**
-```
-# Task: Fix login button
-
-## Project: my-web-app
-
-## Instructions:
-1. Locate the login button in `src/components/Header.js`
-2. Update the styling to use the new color scheme
-3. Test on Chrome, Firefox, and Safari
-4. Run unit tests before committing
-```
-
-### Complete Email Example
-
-**Subject:** `codemail:[frontend-app]`
-
-**Body:**
+**Example:**
 ```
 Please implement a dark mode toggle feature for our frontend application.
 
@@ -144,22 +84,6 @@ Files to modify:
 Test the feature in Chrome and Firefox before submitting.
 ```
 
-### Configuration
-
-You can customize the prefix by setting the `CODEMAIL_PREFIX` environment variable:
-
-```bash
-export CODEMAIL_PREFIX="task:"
-```
-
-With this configuration, valid subjects would be:
-```
-task:[project-name]
-TASK:[Project-Name]
-```
-
-For more examples and detailed documentation, see [EXAMPLE_EMAIL.md](EXAMPLE_EMAIL.md).
-
 ## 🌐 REST API
 
 Start the API server:
@@ -175,10 +99,15 @@ Access documentation at: http://localhost:8000/docs
 - `GET /` - System status
 - `GET /tasks` - List all tasks
 - `GET /tasks/{task_id}` - Get specific task
-- `POST /tasks` - Create new task
 - `PATCH /tasks/{task_id}/status` - Update task status
 - `DELETE /tasks/{task_id}` - Delete task
 - `GET /queue/status` - Queue statistics
+
+## 📖 Documentation
+
+- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Detailed setup instructions
+- **[EXAMPLE_EMAIL.md](EXAMPLE_EMAIL.md)** - Email format examples
+- **[AGENTS.md](AGENTS.md)** - Development plan and guidelines
 
 ## 🧪 Testing
 
@@ -187,16 +116,6 @@ Run the test suite:
 ```bash
 source venv/bin/activate
 python test_system.py
-```
-
-Test individual components:
-
-```bash
-# Test email parsing
-python -c "from email_parser import create_email_parser; parser = create_email_parser(); print(parser.parse_email({'subject': '[test] hello', 'body': 'world'}))"
-
-# Test task queue
-python -c "from task_queue import create_task_queue; q = create_task_queue(); print(q.get_all_tasks())"
 ```
 
 ## 📁 Project Structure
@@ -212,15 +131,12 @@ codemail/
 ├── email_reporter.py    # SMTP email sending
 ├── task_queue.py        # SQLite task storage
 ├── agent_loop.py        # Task execution orchestration
-├── workflow.py          # Complete workflow implementation
 ├── api_server.py        # REST API server
 ├── test_system.py       # Component testing suite
 ├── requirements.txt     # Python dependencies
 ├── .env.example         # Environment template
 ├── setup.sh             # Automated setup script
-├── README.md            # This file
-├── SETUP_GUIDE.md       # Detailed setup instructions
-└── PROJECT_STATUS.md    # Development status and roadmap
+└── AGENTS.md            # Development plan and guidelines
 ```
 
 ## 🔧 Configuration
@@ -254,23 +170,6 @@ pending → running → completed
 - **running** - Task is currently being processed by the agent
 - **completed** - Task finished successfully with output
 - **failed** - Task encountered an error during execution
-
-## 🛠️ Development
-
-### Current Phase: Phase 1 Complete ✅
-
-- ✅ Email monitoring and parsing
-- ✅ Basic LLM integration  
-- ✅ Task queue with SQLite
-- ✅ Email reporting system
-- ✅ REST API endpoints
-
-### Next Steps (Phase 2)
-
-- 🔄 Enhanced task management
-- 🔄 Bash command execution
-- 🔄 Project context awareness
-- 🔄 Concurrent task processing
 
 ## 🔒 Security Notes
 

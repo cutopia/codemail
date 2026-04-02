@@ -1,8 +1,6 @@
 # Codemail Setup Guide
 
-## Quick Start
-
-Get up and running with Codemail in 5 minutes.
+## Quick Start (5 minutes)
 
 ### Step 1: Install Dependencies
 
@@ -69,21 +67,6 @@ If you prefer to use a remote API (OpenAI, etc.):
 LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
 LLM_API_KEY=sk-your-api-key-here
 ```
-
-### Subject Validation
-
-All codemail requests must follow this pattern:
-
-```
-codemail:[project-name] instructions
-```
-
-Examples:
-- ✅ `codemail:[my-project] Fix login bug`
-- ✅ `CODEMAIL:[api-service] Add rate limiting`
-- ❌ `[my-project] Fix bug` (missing prefix)
-
-You can customize the prefix by setting `CODEMAIL_PREFIX` in your `.env` file.
 
 ## Testing Your Setup
 
