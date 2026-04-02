@@ -1,5 +1,14 @@
 # Codemail Project Plan
 
+## Philosophy: Simplicity and Clarity
+**Keep the project clean, simple, and focused.** As features are added, resist the urge to overcomplicate the structure. A clean project structure enables:
+- Faster development and debugging
+- Easier onboarding for new contributors
+- Reduced maintenance burden
+- Clear understanding of system flow
+
+When adding functionality, ask: "Can this be integrated into existing files?" or "Is this complexity truly necessary?" Remove obsolete code and documentation regularly.
+
 ## Overview
 Codemail is a system that allows users to control a self-hosted LLM and coding agent remotely by sending emails with instructions. The system monitors incoming emails, processes tasks in an agentic loop, and reports back via email.
 
@@ -120,7 +129,24 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 5. **Logging**: Maintain comprehensive logging for debugging and monitoring
 6. **Security**: Never commit sensitive credentials; use .env files with gitignore
 7. **Documentation**: Update documentation as features are added
-8. **Unique Task IDs**: Use UUID4 for all tasks to enable reliable task management
+
+## Project Structure Guidelines
+
+1. **Keep It Simple**: Prioritize minimal, focused files over complex, multi-purpose ones
+2. **One Responsibility Per File**: Each file should have a single, well-defined purpose
+3. **Avoid Redundancy**: Remove duplicate code or overlapping functionality
+4. **Organize Logically**: Group related functionality together (e.g., email-related files in one area)
+5. **Remove Unused Code**: Delete obsolete files, commented-out code, and experimental features that aren't being used
+6. **Document File Purpose**: Add brief comments at the top of each file explaining its role
+7. **Consistent Naming**: Use clear, consistent naming conventions for files and functions
+8. **Limit File Count**: When adding new functionality, consider if it can be integrated into existing files rather than creating new ones
+
+## Testing Guidelines
+
+1. **Write Tests First**: Create tests before implementing new features (TDD)
+2. **Test Coverage**: Aim for comprehensive coverage of core functionality
+3. **Automated Testing**: Run tests regularly during development
+4. **Simple Test Structure**: Keep test files organized and easy to understand
 
 ## Configuration Requirements
 
