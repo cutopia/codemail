@@ -6,6 +6,7 @@ Connects to local LM Studio endpoint and executes coding tasks.
 import requests
 import json
 import logging
+from datetime import datetime
 from typing import List, Dict, Optional
 from config import llm_config
 
@@ -145,13 +146,15 @@ Any errors encountered during execution"""
             max_iterations: Maximum number of refinement iterations
             
         Returns:
-            Dictionary with final results and iteration history
+            Dictionary with final results including iteration history and step summaries.
+            Step summaries contain descriptions of each execution step taken by the agent.
         """
         logger.info(f"Starting iterative task execution (max {max_iterations} iterations)")
         
-        # Track steps for progress
+        # Track steps for progress and capture summaries
         total_steps = 1 + max_iterations  # Initial execution + max refinement iterations
         current_step = 0
+        step_summaries = []  # Collect summaries of each step
         
         # Report initial step
         if progress_callback and task_id:
@@ -167,8 +170,18 @@ Any errors encountered during execution"""
             return {
                 **result,
                 "iterations": 0,
-                "iteration_history": []
+                "iteration_history": [],
+                "step_summaries": []
             }
+        
+        # Capture initial step summary
+        initial_summary = f"Initial execution completed. Generated response with {len(result.get('output', ''))} characters."
+        step_summaries.append({
+            "step": current_step,
+            "description": "Initial task execution",
+            "summary": initial_summary,
+            "timestamp": datetime.now().isoformat() if 'datetime' in dir() else None
+        })
         
         iteration_history = [result["output"]]
         current_output = result["output"]
@@ -208,11 +221,30 @@ Your improved response:"""
             # Check if task is complete
             if "TASK_COMPLETE" in refined_response.upper():
                 logger.info("Task marked as complete by LLM")
+                
+                # Capture final step summary
+                final_summary = f"Task marked complete after {i} refinement iterations. Final output has {len(refined_response)} characters."
+                step_summaries.append({
+                    "step": current_step,
+                    "description": "Task completion review",
+                    "summary": final_summary,
+                    "timestamp": datetime.now().isoformat() if 'datetime' in dir() else None
+                })
+                
                 current_step += 1  # Count this step
                 break
             
             current_output = refined_response
             iteration_history.append(refined_response)
+            
+            # Capture refinement step summary
+            refinement_summary = f"Refinement iteration {i} completed. Output improved with {len(refined_response)} characters."
+            step_summaries.append({
+                "step": current_step,
+                "description": f"Refinement iteration {i}",
+                "summary": refinement_summary,
+                "timestamp": datetime.now().isoformat() if 'datetime' in dir() else None
+            })
         
         # Report final progress
         current_step += 1
@@ -227,7 +259,8 @@ Your improved response:"""
             "output": current_output,
             "error": None,
             "iterations": len(iteration_history),
-            "iteration_history": iteration_history
+            "iteration_history": iteration_history,
+            "step_summaries": step_summaries
         }
     
     def execute_iterative_task(self, instructions: str, max_iterations: int = 5) -> Dict:

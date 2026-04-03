@@ -89,6 +89,7 @@ class EmailReporter:
             output = task_data.get("output", "")
             error = task_data.get("error", "")
             iterations = task_data.get("iterations", 0)
+            step_summaries = task_data.get("step_summaries", [])
             
             # Format report content
             report_lines = [
@@ -103,6 +104,24 @@ class EmailReporter:
                 report_lines.extend([
                     "",
                     "Task completed successfully!",
+                    "",
+                    "## Steps Taken:"
+                ])
+                
+                # Add step summaries if available
+                if step_summaries:
+                    for i, summary in enumerate(step_summaries, 1):
+                        step_num = summary.get("step", i)
+                        description = summary.get("description", f"Step {step_num}")
+                        summary_text = summary.get("summary", "")
+                        
+                        report_lines.append(f"\n### Step {step_num}: {description}")
+                        report_lines.append(summary_text)
+                else:
+                    # Fallback if no step summaries
+                    report_lines.append("\nNo detailed step information available.")
+                
+                report_lines.extend([
                     "",
                     "## Results:",
                     output
