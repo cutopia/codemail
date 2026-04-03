@@ -24,3 +24,6 @@ imaplib2>=3.7  # IMAP email monitoring
 
 # Monitoring and health checks
 psutil>=5.9.0  # System monitoring
+
+# Workspace management (for bash execution)
+# subprocess is included in Python standard library

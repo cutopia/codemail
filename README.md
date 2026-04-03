@@ -10,6 +10,8 @@ Codemail is a system that allows you to control a self-hosted LLM and coding age
 - 📊 **Task queue system** - Manages multiple tasks with status tracking
 - 📧 **Email reports** - Get completion reports sent back to your inbox
 - 🌐 **REST API** - Monitor and manage tasks via web interface
+- 💼 **Project workspace isolation** - Each project gets its own dedicated directory
+- 💻 **Bash command execution** - Agent can execute shell commands for file operations
 
 ## 🚀 Quick Start (5 minutes)
 
@@ -114,9 +116,22 @@ Access documentation at: http://localhost:8000/docs
 Run the test suite:
 
 ```bash
+# Run all tests
 source venv/bin/activate
+python test_workspace_manager.py
+
+# Run integration tests
+python test_integration.py
+
+# Run system tests
 python test_system.py
 ```
+
+### Test Coverage
+
+- **workspace_manager.py** - Project directory isolation and bash execution
+- **test_integration.py** - Complete workflow testing
+- **test_agent_loop.py** - Agent loop functionality
 
 ## 📁 Project Structure
 
@@ -127,7 +142,8 @@ codemail/
 ├── logger.py            # Logging setup and configuration
 ├── email_monitor.py     # IMAP email monitoring
 ├── email_parser.py      # Email content parsing
-├── llm_interface.py     # LLM API integration
+├── llm_interface.py     # LLM API integration + bash executor
+├── workspace_manager.py # Project workspace isolation
 ├── email_reporter.py    # SMTP email sending
 ├── task_queue.py        # SQLite task storage
 ├── agent_loop.py        # Task execution orchestration
@@ -171,12 +187,42 @@ pending → running → completed
 - **completed** - Task finished successfully with output
 - **failed** - Task encountered an error during execution
 
+## 💼 Project Workspace & Bash Execution
+
+### How It Works
+
+1. **Project Isolation**: Each project gets its own workspace directory under `./projects/`
+2. **Bash Commands**: The agent can execute shell commands for file operations
+3. **Safe Execution**: Commands run in the project's isolated directory
+
+### Example Workflow
+
+```
+Email: codemail:[my-web-app]
+Body: Create a new React component and add it to the components folder
+
+Agent:
+1. Creates workspace at ./projects/my-web-app/
+2. Executes bash commands like:
+   - mkdir src/components
+   - touch src/components/NewComponent.js
+3. Reports results back via email
+```
+
+### Configuration
+
+```env
+# Workspace directory (default: ./projects)
+WORKSPACE_DIR=/path/to/workspace
+```
+
 ## 🔒 Security Notes
 
 - Never commit `.env` file (included in `.gitignore`)
 - Use app passwords instead of regular passwords
 - Store sensitive data in environment variables
 - Validate all input from emails before processing
+- Project workspaces are isolated to prevent cross-project interference
 
 ## 📝 License
 

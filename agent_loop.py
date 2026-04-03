@@ -5,10 +5,11 @@ Orchestrates the execution of tasks using LLM and manages the workflow with robu
 
 import logging
 import time
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Callable, List, Any
 from email_parser import create_email_parser
-from llm_interface import create_llm_interface
+from llm_interface import create_llm_interface, create_bash_executor
 from task_queue import create_task_queue
 from email_reporter import create_email_reporter
 
@@ -29,6 +30,7 @@ class AgentLoop:
         
         self.parser = create_email_parser(parser_prefix)
         self.llm = create_llm_interface()
+        self.bash_executor = create_bash_executor()
         self.queue = create_task_queue()
         self.reporter = create_email_reporter()
         
@@ -36,6 +38,9 @@ class AgentLoop:
         self.max_retries = int(os.getenv("AGENT_MAX_RETRIES", "3"))
         self.retry_delay = int(os.getenv("AGENT_RETRY_DELAY", "60"))  # seconds
         self.task_timeout = int(os.getenv("TASK_TIMEOUT", "3600"))  # 1 hour default
+        
+        # Get workspace directory from environment or use default
+        self.workspace_dir = os.getenv("WORKSPACE_DIR", os.path.join(os.getcwd(), "projects"))
         
     def process_email(self, email_data: Dict) -> Optional[str]:
         """
@@ -107,7 +112,16 @@ class AgentLoop:
                 logger.error(f"Task {task_id} not found")
                 return {"status": "failed", "error": "Task not found"}
             
-            logger.info(f"Executing task {task_id}: {task['instructions'][:100]}...")
+            project_name = task.get('project_name', 'default')
+            logger.info(f"Executing task {task_id} for project '{project_name}': {task['instructions'][:100]}...")
+            
+            # Create workspace for the project
+            try:
+                project_path = self.bash_executor.workspace_manager.create_project_workspace(project_name)
+                logger.info(f"Project workspace: {project_path}")
+            except Exception as e:
+                logger.warning(f"Failed to create workspace: {e}")
+                project_path = None
             
             # Check if task has timed out
             created_at = datetime.fromisoformat(task['created_at']) if task.get('created_at') else None
@@ -132,11 +146,13 @@ class AgentLoop:
                     "timestamp": datetime.now().isoformat()
                 })
             
-            # Execute with LLM and progress tracking
+            # Execute with LLM and progress tracking (pass project context)
             result = self.llm.execute_iterative_task_with_progress(
                 task["instructions"],
                 task_id=task_id,
-                progress_callback=self._progress_callback
+                progress_callback=self._progress_callback,
+                project_name=project_name,
+                workspace_path=project_path
             )
             
             # Update task with results
@@ -203,7 +219,16 @@ class AgentLoop:
                     logger.error(f"Task {task_id} not found")
                     return False
                 
-                logger.info(f"Executing task {task_id} (attempt {attempt + 1}/{self.max_retries + 1}): {task['instructions'][:100]}...")
+                project_name = task.get('project_name', 'default')
+                logger.info(f"Executing task {task_id} for project '{project_name}' (attempt {attempt + 1}/{self.max_retries + 1}): {task['instructions'][:100]}...")
+                
+                # Create workspace for the project
+                try:
+                    project_path = self.bash_executor.workspace_manager.create_project_workspace(project_name)
+                    logger.info(f"Project workspace: {project_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to create workspace: {e}")
+                    project_path = None
                 
                 # Update status to running with progress tracking
                 self.queue.update_task_status(
@@ -220,11 +245,13 @@ class AgentLoop:
                         "timestamp": datetime.now().isoformat()
                     })
                 
-                # Execute with LLM and progress tracking
+                # Execute with LLM and progress tracking (pass project context)
                 result = self.llm.execute_iterative_task_with_progress(
                     task["instructions"],
                     task_id=task_id,
-                    progress_callback=self._progress_callback
+                    progress_callback=self._progress_callback,
+                    project_name=project_name,
+                    workspace_path=project_path
                 )
                 
                 # Update task with results

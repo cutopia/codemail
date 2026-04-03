@@ -1,13 +1,14 @@
 """
 LLM interface module for Codemail system.
-Connects to local LM Studio endpoint and executes coding tasks.
+Connects to local LM Studio endpoint and executes coding tasks with bash command execution.
 """
 
 import requests
 import json
 import logging
+import subprocess
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from config import llm_config
 
 logger = logging.getLogger("codemail.llm_interface")
@@ -70,34 +71,42 @@ class LLMInterface:
             logger.error(f"Unexpected error in LLM request: {e}")
             return None
     
-    def execute_task(self, instructions: str, project_context: Optional[str] = None) -> Dict:
+    def execute_task(self, instructions: str, project_context: Optional[str] = None,
+                    bash_executor=None) -> Dict:
         """
-        Execute a coding task using the LLM.
+        Execute a coding task using the LLM with optional bash command execution.
         
         Args:
             instructions: Task instructions from email
-            project_context: Optional context about the project
+            project_context: Optional context about the project (workspace path)
+            bash_executor: Optional BashExecutor instance for running commands
             
         Returns:
             Dictionary with execution results including status, output, and errors
         """
         logger.info(f"Executing task with instructions: {instructions[:100]}...")
         
-        # Build system prompt for coding agent
+        # Build system prompt for coding agent with bash execution capability
         system_prompt = """You are an expert coding assistant. Your task is to analyze the project context and execute the user's instructions.
 
 Follow these guidelines:
 1. First, understand the project structure and requirements
 2. Break down complex tasks into smaller steps
-3. Execute each step carefully
+3. Execute each step carefully using bash commands when needed
 4. Report back with a comprehensive summary of what you did
+
+Bash Command Execution:
+- You can execute bash commands to interact with the filesystem
+- Commands should be wrapped in ```bash code blocks
+- The agent will execute these commands in the project's workspace directory
+- Example: ```bash\nls -la\n```
 
 Format your response as:
 ## Summary
 Brief overview of what was accomplished
 
 ## Steps Taken
-List of steps you executed
+List of steps you executed, including any bash commands run
 
 ## Results
 Final results and any output generated
@@ -109,7 +118,8 @@ Any errors encountered during execution"""
         user_prompt = f"INSTRUCTIONS:\n{instructions}"
         
         if project_context:
-            user_prompt += f"\n\nPROJECT CONTEXT:\n{project_context}"
+            user_prompt += f"\n\nPROJECT CONTEXT:\nWorkspace directory: {project_context}\n"
+            user_prompt += "All file operations should be performed in this directory."
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -135,7 +145,9 @@ Any errors encountered during execution"""
         }
     
     def execute_iterative_task_with_progress(self, instructions: str, task_id: str = None,
-                                           progress_callback=None, max_iterations: int = 5) -> Dict:
+                                           progress_callback=None, max_iterations: int = 5,
+                                           project_name: str = "default",
+                                           workspace_path: str = None) -> Dict:
         """
         Execute a task with iterative refinement and progress tracking.
         
@@ -144,12 +156,14 @@ Any errors encountered during execution"""
             task_id: Optional task ID for progress tracking
             progress_callback: Callback function for progress updates (task_id, current_step, total_steps, message)
             max_iterations: Maximum number of refinement iterations
+            project_name: Name of the project (for workspace isolation)
+            workspace_path: Path to project workspace directory
             
         Returns:
             Dictionary with final results including iteration history and step summaries.
             Step summaries contain descriptions of each execution step taken by the agent.
         """
-        logger.info(f"Starting iterative task execution (max {max_iterations} iterations)")
+        logger.info(f"Starting iterative task execution for project '{project_name}' (max {max_iterations} iterations)")
         
         # Track steps for progress and capture summaries
         total_steps = 1 + max_iterations  # Initial execution + max refinement iterations
@@ -163,8 +177,8 @@ Any errors encountered during execution"""
             except Exception as e:
                 logger.warning(f"Progress callback failed: {e}")
         
-        # Initial execution
-        result = self.execute_task(instructions)
+        # Initial execution with project context
+        result = self.execute_task(instructions, project_context=workspace_path)
         
         if result["status"] == "failed":
             return {
@@ -294,6 +308,63 @@ Your improved response:"""
             return False
 
 
+class BashExecutor:
+    """Executes bash commands with project workspace isolation."""
+    
+    def __init__(self, base_workspace_dir: str = None):
+        """
+        Initialize bash executor.
+        
+        Args:
+            base_workspace_dir: Base directory for project workspaces. Defaults to ./projects
+        """
+        try:
+            from workspace_manager import WorkspaceManager
+            self.workspace_manager = WorkspaceManager(base_workspace_dir)
+        except ImportError:
+            logger.warning("workspace_manager not available, using fallback")
+            self.workspace_manager = None
+    
+    def execute_command(self, command: str, project_name: str = "default") -> Dict[str, Any]:
+        """
+        Execute a bash command in the appropriate workspace.
+        
+        Args:
+            command: Bash command to execute
+            project_name: Name of the project (for workspace isolation)
+            
+        Returns:
+            Dictionary with execution results
+        """
+        if self.workspace_manager:
+            return self.workspace_manager.execute_in_workspace(project_name, command)
+        else:
+            # Fallback: execute in current directory
+            try:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
+                return {
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "returncode": result.returncode,
+                    "command": command,
+                    "timestamp": datetime.now().isoformat()
+                }
+            except Exception as e:
+                return {
+                    "stdout": "",
+                    "stderr": str(e),
+                    "returncode": -1,
+                    "command": command,
+                    "timestamp": datetime.now().isoformat()
+                }
+
+
 def create_llm_interface():
     """Factory function to create LLM interface."""
     llm = LLMInterface()
@@ -303,3 +374,8 @@ def create_llm_interface():
         logger.warning("LLM endpoint connection test failed. Tasks may fail.")
     
     return llm
+
+
+def create_bash_executor(workspace_dir: str = None):
+    """Factory function to create bash executor."""
+    return BashExecutor(workspace_dir)
