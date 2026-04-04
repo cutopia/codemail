@@ -6,6 +6,7 @@ Monitors email inbox for new messages and processes them.
 import imaplib
 import email
 from email.header import decode_header
+from email.utils import parseaddr
 import time
 import logging
 from config import email_config
@@ -21,6 +22,10 @@ class EmailMonitor:
         self.imap_port = email_config.imap_port
         self.email_address = email_config.email_address
         self.email_password = email_config.email_password
+        
+        # Import whitelist here to avoid circular imports
+        from whitelist import get_email_whitelist
+        self.whitelist = get_email_whitelist()
         
     def connect(self):
         """Connect to IMAP server."""
@@ -112,8 +117,9 @@ class EmailMonitor:
                 else:
                     subject = subject.decode('utf-8')
             
-            # Get sender
+            # Get sender - extract email address from "From" field
             from_ = msg.get("From", "")
+            sender_email = self._extract_email_address(from_)
             
             # Extract body
             body = ""
@@ -142,6 +148,7 @@ class EmailMonitor:
             
             return {
                 "from": from_,
+                "sender_email": sender_email,
                 "subject": subject,
                 "body": body.strip()
             }
@@ -149,6 +156,41 @@ class EmailMonitor:
         except Exception as e:
             logger.error(f"Error extracting email content: {e}")
             return None
+    
+    def _extract_email_address(self, from_field: str) -> str:
+        """Extract email address from From field (handles 'Name <email>' format).
+        
+        Uses Python's built-in parseaddr which handles RFC-compliant email formats
+        more reliably than regex patterns.
+        """
+        # Use email.utils.parseaddr to extract name and email address
+        name, addr = parseaddr(from_field)
+        
+        # Return the email address (empty string if no valid email found)
+        return addr.strip() if addr else from_field.strip()
+    
+    def is_sender_whitelisted(self, sender_email: str) -> bool:
+        """
+        Check if the sender email is whitelisted.
+        
+        Args:
+            sender_email: Email address to check
+            
+        Returns:
+            True if whitelisted or whitelist not configured, False otherwise
+        """
+        # If no whitelist is configured, allow all (backward compatibility)
+        if self.whitelist is None:
+            logger.debug("No whitelist configured - allowing all senders")
+            return True
+        
+        # Check if sender is whitelisted
+        is_whitelisted = self.whitelist.is_sender_whitelisted(sender_email)
+        
+        if not is_whitelisted:
+            logger.warning(f"Sender '{sender_email}' is not in the email whitelist")
+        
+        return is_whitelisted
     
     def monitor_loop(self, callback, poll_interval=60):
         """
@@ -182,6 +224,13 @@ class EmailMonitor:
                             email_data = self.extract_email_content(msg)
                             
                             if email_data:
+                                sender_email = email_data.get("sender_email", "")
+                                
+                                # Check if sender is whitelisted
+                                if not self.is_sender_whitelisted(sender_email):
+                                    logger.info(f"Skipping email from non-whitelisted sender: {sender_email}")
+                                    continue
+                                
                                 logger.info(f"Processing email from {email_data['from']}")
                                 
                                 # Call callback with email data
@@ -210,6 +259,12 @@ def create_email_monitor():
     """Factory function to create email monitor with validation."""
     try:
         email_config.validate()
+        
+        # Validate whitelist configuration if set
+        is_valid, error_msg = email_config.validate_whitelist()
+        if not is_valid:
+            logger.warning(f"Whitelist configuration warning: {error_msg}")
+        
         return EmailMonitor()
     except ValueError as e:
         logger.error(f"Configuration error: {e}")

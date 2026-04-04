@@ -1,0 +1,4 @@
+Codemail Workspace
+Project: bliss
+Created: 2026-04-03T13:45:47.612716
+This directory is managed by the codemail agent.

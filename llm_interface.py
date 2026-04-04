@@ -71,6 +71,31 @@ class LLMInterface:
             logger.error(f"Unexpected error in LLM request: {e}")
             return None
     
+    def _extract_bash_commands(self, text: str) -> List[str]:
+        """
+        Extract bash commands from markdown code blocks.
+        
+        Args:
+            text: Text potentially containing ```bash code blocks
+            
+        Returns:
+            List of extracted bash command strings
+        """
+        import re
+        
+        # Pattern to match ```bash ... ``` or ``` ... ``` blocks
+        pattern = r'```(?:bash)?\s*([\s\S]*?)```'
+        matches = re.findall(pattern, text)
+        
+        commands = []
+        for match in matches:
+            # Clean up the command (remove leading/trailing whitespace)
+            cmd = match.strip()
+            if cmd:
+                commands.append(cmd)
+        
+        return commands
+    
     def execute_task(self, instructions: str, project_context: Optional[str] = None,
                     bash_executor=None) -> Dict:
         """
@@ -138,16 +163,44 @@ Any errors encountered during execution"""
         
         logger.info("Task execution completed successfully")
         
+        # Extract and execute any bash commands from the response
+        bash_commands = self._extract_bash_commands(response)
+        bash_results = []
+        
+        if bash_executor and bash_commands:
+            for cmd in bash_commands:
+                try:
+                    result = bash_executor.execute_command(cmd, project_name="default")
+                    bash_results.append({
+                        "command": cmd,
+                        "result": result
+                    })
+                    
+                    # Add command output to response for LLM to see
+                    if result.get("returncode", 0) == 0:
+                        response += f"\n\n[Bash Command Output]\nCommand: {cmd}\nOutput:\n{result.get('stdout', '')}"
+                    else:
+                        response += f"\n\n[Bash Command Error]\nCommand: {cmd}\nError:\n{result.get('stderr', '')}"
+                        
+                except Exception as e:
+                    bash_results.append({
+                        "command": cmd,
+                        "error": str(e)
+                    })
+        
         return {
             "status": "completed",
             "output": response,
-            "error": None
+            "error": None,
+            "bash_commands_executed": len(bash_commands),
+            "bash_results": bash_results
         }
     
     def execute_iterative_task_with_progress(self, instructions: str, task_id: str = None,
                                            progress_callback=None, max_iterations: int = 5,
                                            project_name: str = "default",
-                                           workspace_path: str = None) -> Dict:
+                                           workspace_path: str = None,
+                                           bash_executor=None) -> Dict:
         """
         Execute a task with iterative refinement and progress tracking.
         
@@ -201,7 +254,7 @@ Any errors encountered during execution"""
         current_output = result["output"]
         
         # Iterative refinement (simple implementation)
-        for i in range(1, max_iterations):
+        for i in range(1, max_iterations + 1):  # Fixed: now runs max_iterations times
             current_step += 1
             logger.info(f"Refinement iteration {i}/{max_iterations}")
             
@@ -232,8 +285,84 @@ Your improved response:"""
             if not refined_response:
                 break
             
-            # Check if task is complete
-            if "TASK_COMPLETE" in refined_response.upper():
+            # Extract and execute any bash commands from the refined response
+            bash_commands = self._extract_bash_commands(refined_response)
+            bash_results = []
+            
+            if bash_executor and bash_commands:
+                for cmd in bash_commands:
+                    try:
+                        result = bash_executor.execute_command(cmd, project_name=project_name)
+                        bash_results.append({
+                            "command": cmd,
+                            "result": result
+                        })
+                        
+                        # Add command output to response for LLM to see
+                        if result.get("returncode", 0) == 0:
+                            refined_response += f"\n\n[Bash Command Output]\nCommand: {cmd}\nOutput:\n{result.get('stdout', '')}"
+                        else:
+                            refined_response += f"\n\n[Bash Command Error]\nCommand: {cmd}\nError:\n{result.get('stderr', '')}"
+                            
+                    except Exception as e:
+                        bash_results.append({
+                            "command": cmd,
+                            "error": str(e)
+                        })
+            
+            # Check if task is complete (be more specific to avoid false positives)
+            response_upper = refined_response.upper()
+            
+            # Look for explicit TASK_COMPLETE at the beginning or in a clear context
+            is_complete = False
+            lines = refined_response.split('\n')
+            
+            # Track if we're inside a markdown code block
+            in_code_block = False
+            
+            for line in lines:
+                line_stripped = line.strip()
+                line_upper = line_stripped.upper()
+                
+                # Check for markdown code block markers (``` at start of line or containing ```)
+                # Handle cases like: ```bash, text ``` more text, ```
+                if '```' in line_stripped:
+                    # Count backticks to determine if this is a code block marker
+                    backtick_count = line_stripped.count('```')
+                    
+                    # If it starts with ``` or contains only ```, it's a code block marker
+                    if line_stripped.startswith('```') or backtick_count >= 2:
+                        in_code_block = not in_code_block
+                        continue
+                
+                # Skip lines inside code blocks
+                if in_code_block:
+                    continue
+                
+                # Check for exact TASK_COMPLETE (case-insensitive)
+                if line_upper == "TASK_COMPLETE":
+                    is_complete = True
+                    break
+                
+                # Check for common completion phrases at the start of the line
+                completion_phrases = [
+                    "I HAVE COMPLETED",
+                    "COMPLETED SUCCESSFULLY", 
+                    "TASK COMPLETED",
+                    "ALL TASKS COMPLETED"
+                ]
+                
+                if any(line_upper.startswith(phrase) for phrase in completion_phrases):
+                    is_complete = True
+                    break
+            
+            # Also check if the entire response (after trimming) is just a completion message
+            if not is_complete:
+                trimmed_response = refined_response.strip()
+                if trimmed_response.upper() == "TASK_COMPLETE":
+                    is_complete = True
+            
+            if is_complete:
                 logger.info("Task marked as complete by LLM")
                 
                 # Capture final step summary
@@ -245,8 +374,7 @@ Your improved response:"""
                     "timestamp": datetime.now().isoformat() if 'datetime' in dir() else None
                 })
                 
-                current_step += 1  # Count this step
-                break
+                break  # Exit loop when task is complete
             
             current_output = refined_response
             iteration_history.append(refined_response)

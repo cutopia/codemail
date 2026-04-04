@@ -19,6 +19,7 @@ class EmailConfig:
         self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.email_address = os.getenv("EMAIL_ADDRESS")
+        
         # Strip quotes from password if present
         password = os.getenv("EMAIL_PASSWORD")
         if password and len(password) >= 2:
@@ -30,10 +31,49 @@ class EmailConfig:
         # Codemail subject prefix
         self.codemail_prefix = os.getenv("CODEMAIL_PREFIX", "codemail:")
         
+        # Email whitelist configuration
+        # Format: comma-separated email addresses (e.g., "user1@example.com,user2@example.com")
+        self.email_whitelist_senders = os.getenv("EMAIL_WHITELIST_SENDERS", "")
+        self.email_whitelist_recipients = os.getenv("EMAIL_WHITELIST_RECIPIENTS", "")
+        
     def validate(self):
         """Validate that required email configuration is present."""
         if not all([self.email_address, self.email_password]):
             raise ValueError("EMAIL_ADDRESS and EMAIL_PASSWORD must be set in environment variables")
+    
+    def validate_whitelist(self):
+        """
+        Validate whitelist configuration.
+        
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        # If no whitelist is configured, allow all (for backward compatibility)
+        if not self.email_whitelist_senders and not self.email_whitelist_recipients:
+            return True, None
+        
+        # Check sender whitelist format
+        if self.email_whitelist_senders:
+            senders = [s.strip() for s in self.email_whitelist_senders.split(',') if s.strip()]
+            for sender in senders:
+                if not self._is_valid_email(sender) and not sender.startswith('@'):
+                    return False, f"Invalid email format in EMAIL_WHITELIST_SENDERS: {sender}"
+        
+        # Check recipient whitelist format
+        if self.email_whitelist_recipients:
+            recipients = [r.strip() for r in self.email_whitelist_recipients.split(',') if r.strip()]
+            for recipient in recipients:
+                if not self._is_valid_email(recipient) and not recipient.startswith('@'):
+                    return False, f"Invalid email format in EMAIL_WHITELIST_RECIPIENTS: {recipient}"
+        
+        return True, None
+    
+    def _is_valid_email(self, email: str) -> bool:
+        """Check if an email address has a valid format."""
+        # Simple email regex pattern
+        import re
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return bool(re.match(pattern, email))
 
 
 class LLMConfig:

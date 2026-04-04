@@ -1,254 +1,164 @@
-# 📧 Codemail - Email-Driven Coding Agent
+# Codemail - Email-Driven Coding Agent
 
 Codemail is a system that allows you to control a self-hosted LLM and coding agent remotely by sending emails with instructions. The system monitors incoming emails, processes tasks in an agentic loop, and reports back via email.
 
-## ✨ Features
+## Features
 
-- 📧 **Email-based interface** - Send instructions via email to trigger coding tasks
-- 🤖 **LLM-powered agent** - Uses local LLM (LM Studio) for intelligent task execution  
-- 🔁 **Iterative refinement** - Agent refines its own output for better results
-- 📊 **Task queue system** - Manages multiple tasks with status tracking
-- 📧 **Email reports** - Get completion reports sent back to your inbox
-- 🌐 **REST API** - Monitor and manage tasks via web interface
-- 💼 **Project workspace isolation** - Each project gets its own dedicated directory
-- 💻 **Bash command execution** - Agent can execute shell commands for file operations
+- 📧 **Email-based interface** - Send instructions via email
+- 🔒 **Built-in security** - Email whitelist for sender/recipient control
+- 🔄 **Agentic processing** - LLM-driven task execution with iterative refinement
+- 📊 **Task tracking** - Real-time status monitoring and reporting
+- ⚡ **Async execution** - Celery-based queue management for concurrent tasks
 
-## 🚀 Quick Start (5 minutes)
+## Quick Start
 
-### 1. Install Dependencies
+### Prerequisites
 
-```bash
-./setup.sh
-```
+- Python 3.12+
+- Local LLM server (e.g., LM Studio) running on port 1234
+- Email account with IMAP/SMTP access
 
-### 2. Configure Environment
-
-Edit `.env` with your credentials:
-
-```env
-# Email Configuration
-IMAP_HOST=imap.gmail.com
-SMTP_HOST=smtp.gmail.com
-EMAIL_ADDRESS=your_email@gmail.com
-EMAIL_PASSWORD=your_app_password
-
-# LLM Configuration (LM Studio)
-LLM_ENDPOINT=http://127.0.0.1:1234/v1/models
-LLM_API_KEY=dummy_key
-```
-
-### 3. Start the System
+### Installation
 
 ```bash
-source venv/bin/activate
-python main.py
-```
+# Clone the repository
+git clone <repository-url>
+cd codemail
 
-## 📧 Email Format
+# Install dependencies
+pip install -r requirements.txt
 
-### Subject Line Pattern
-
-```
-codemail:[project-name]
-```
-
-Where:
-- `codemail:` - Required prefix (case-insensitive)
-- `[project-name]` - Project name in square brackets
-- **No instructions** - Instructions are in the email body only
-
-**Valid Examples:**
-```
-codemail:[my-web-app]
-CODEMAIL:[api-service]
-Codemail: [data-pipeline]
-```
-
-### Email Body
-
-The email body must contain detailed instructions for the AI agent.
-
-**Example:**
-```
-Please implement a dark mode toggle feature for our frontend application.
-
-Requirements:
-1. Add a toggle button in the header component
-2. Store user preference in localStorage
-3. Apply dark theme class to body element when enabled
-4. Use CSS variables for theme colors
-
-Files to modify:
-- src/components/Header.js
-- src/styles/theme.css
-- src/utils/storage.js
-
-Test the feature in Chrome and Firefox before submitting.
-```
-
-## 🌐 REST API
-
-Start the API server:
-
-```bash
-python api_server.py
-```
-
-Access documentation at: http://localhost:8000/docs
-
-### Available Endpoints
-
-- `GET /` - System status
-- `GET /tasks` - List all tasks
-- `GET /tasks/{task_id}` - Get specific task
-- `PATCH /tasks/{task_id}/status` - Update task status
-- `DELETE /tasks/{task_id}` - Delete task
-- `GET /queue/status` - Queue statistics
-
-## 📖 Documentation
-
-- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Detailed setup instructions
-- **[EXAMPLE_EMAIL.md](EXAMPLE_EMAIL.md)** - Email format examples
-- **[AGENTS.md](AGENTS.md)** - Development plan and guidelines
-
-## 🧪 Testing
-
-Run the test suite:
-
-```bash
-# Run all tests
-source venv/bin/activate
-python test_workspace_manager.py
-
-# Run integration tests
-python test_integration.py
-
-# Run system tests
-python test_system.py
-```
-
-### Test Coverage
-
-- **workspace_manager.py** - Project directory isolation and bash execution
-- **test_integration.py** - Complete workflow testing
-- **test_agent_loop.py** - Agent loop functionality
-
-## 📁 Project Structure
-
-```
-codemail/
-├── main.py              # Entry point with email monitoring loop
-├── config.py            # Configuration management
-├── logger.py            # Logging setup and configuration
-├── email_monitor.py     # IMAP email monitoring
-├── email_parser.py      # Email content parsing
-├── llm_interface.py     # LLM API integration + bash executor
-├── workspace_manager.py # Project workspace isolation
-├── email_reporter.py    # SMTP email sending
-├── task_queue.py        # SQLite task storage
-├── agent_loop.py        # Task execution orchestration
-├── api_server.py        # REST API server
-├── test_system.py       # Component testing suite
-├── requirements.txt     # Python dependencies
-├── .env.example         # Environment template
-├── setup.sh             # Automated setup script
-└── AGENTS.md            # Development plan and guidelines
-```
-
-## 🔧 Configuration
-
-### Email Setup (Gmail Example)
-
-1. Enable 2-Factor Authentication on your Google Account
-2. Generate an App Password:
-   - Go to Google Account → Security → App passwords
-   - Select "Mail" and your device
-   - Copy the generated password
-3. Update `.env` with your email and app password
-
-### LLM Setup (LM Studio)
-
-1. Install [LM Studio](https://lmstudio.ai/)
-2. Download a model (recommended: Llama-3-8B, Mistral-7B)
-3. Start the local server (default: `http://127.0.0.1:1234/v1/models`)
-4. Verify endpoint works: `curl http://127.0.0.1:1234/v1/models`
-
-## 📊 Task Status Flow
-
-```
-pending → running → completed
-         ↘ failed (error)
-```
-
-### Status Meanings
-
-- **pending** - Task is queued and waiting for execution
-- **running** - Task is currently being processed by the agent
-- **completed** - Task finished successfully with output
-- **failed** - Task encountered an error during execution
-
-## 💼 Project Workspace & Bash Execution
-
-### How It Works
-
-1. **Project Isolation**: Each project gets its own workspace directory under `./projects/`
-2. **Bash Commands**: The agent can execute shell commands for file operations
-3. **Safe Execution**: Commands run in the project's isolated directory
-
-### Example Workflow
-
-```
-Email: codemail:[my-web-app]
-Body: Create a new React component and add it to the components folder
-
-Agent:
-1. Creates workspace at ./projects/my-web-app/
-2. Executes bash commands like:
-   - mkdir src/components
-   - touch src/components/NewComponent.js
-3. Reports results back via email
+# Copy example config and customize
+cp .env.example .env
 ```
 
 ### Configuration
 
-```env
-# Workspace directory (default: ./projects)
-WORKSPACE_DIR=/path/to/workspace
+Edit `.env` with your settings:
+
+```bash
+# Email Server Settings
+IMAP_HOST=imap.gmail.com
+SMTP_HOST=smtp.gmail.com
+EMAIL_ADDRESS=codemail@yourdomain.com
+EMAIL_PASSWORD=your_app_password
+
+# Security - Whitelist Configuration
+EMAIL_WHITELIST_SENDERS="admin@example.com"
+EMAIL_WHITELIST_RECIPIENTS="admin@example.com"
+
+# Codemail Settings
+CODEMAIL_PREFIX=codemail:
 ```
 
-## 🔒 Security Notes
+### Running the System
 
-- Never commit `.env` file (included in `.gitignore`)
-- Use app passwords instead of regular passwords
-- Store sensitive data in environment variables
-- Validate all input from emails before processing
-- Project workspaces are isolated to prevent cross-project interference
+```bash
+# Start the main monitoring loop
+python main.py
+```
 
-## 📝 License
+## Email Whitelist
 
-MIT License - See [LICENSE](LICENSE) file for details.
+Codemail includes a security feature that allows you to control which email addresses can:
 
-## 🤝 Contributing
+1. **Submit tasks** (sender whitelist) - Only whitelisted senders can trigger code execution
+2. **Receive reports** (recipient whitelist) - Reports only go to trusted recipients
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+### Configuration
+
+Add to your `.env` file:
+
+```bash
+# Single or multiple email addresses
+EMAIL_WHITELIST_SENDERS="user1@example.com,user2@example.org"
+EMAIL_WHITELIST_RECIPIENTS="user1@example.com,user2@example.org"
+
+# Or whitelist entire domains
+EMAIL_WHITELIST_SENDERS="@example.com"
+```
+
+For more details, see [EMAIL_WHITELIST.md](EMAIL_WHITELIST.md).
+
+## Email Format
+
+### Subject Line
+
+```
+codemail:project_name
+```
+
+Where `project_name` is the name of your project directory.
+
+### Body
+
+The email body should contain your instructions for the coding agent:
+
+```
+Implement a function to calculate Fibonacci numbers using memoization.
+Create unit tests for the implementation.
+Add documentation comments to all functions.
+```
+
+## Project Structure
+
+```
+codemail/
+├── main.py              # Entry point
+├── config.py            # Configuration management
+├── email_monitor.py     # IMAP email monitoring
+├── email_reporter.py    # SMTP email reporting
+├── email_parser.py      # Email content parsing
+├── agent_loop.py        # Task execution orchestration
+├── llm_interface.py     # LLM communication
+├── task_queue.py        # Task queue management
+├── whitelist.py         # Email whitelist functionality
+├── api_server.py        # REST API for status monitoring
+├── worker.py            # Celery worker
+└── projects/            # Project workspaces (created at runtime)
+```
+
+## Security Considerations
+
+1. **Use App Passwords**: Never use your main email password; generate an app-specific password
+2. **Enable Whitelist**: Always configure sender and recipient whitelists in production
+3. **Local LLM**: Run the LLM server locally to avoid sending sensitive code to external APIs
+4. **Network Security**: Use SSL/TLS for IMAP/SMTP connections
+
+## Development
+
+### Running Tests
+
+```bash
+# Test whitelist functionality
+python test_whitelist.py
+
+# Run integration tests
+python test_integration.py
+```
+
+### Adding Features
+
+1. Keep the project structure simple and focused
+2. Add tests before implementing new features (TDD)
+3. Update documentation as you add features
+4. Ensure backward compatibility when possible
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contributing
+
+Contributions are welcome! Please:
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Write tests for new functionality
+4. Submit a pull request
 
-## 📞 Support
+## Acknowledgments
 
-For issues or questions:
-
-1. Check the logs in `logs/codemail.log`
-2. Review error messages in console output
-3. Test individual components before full integration
-4. Open an issue on GitHub with detailed information
-
----
-
-**Status**: Phase 1 Complete ✅ | Phase 2 In Progress 🔄  
-**Version**: 0.1.0-alpha  
-**Last Updated**: April 2026
+- Built with [FastAPI](https://fastapi.tiangolo.com/) for the API server
+- Uses [Celery](https://docs.celeryproject.org/) for task queue management
+- Powered by local LLMs via LM Studio or similar servers

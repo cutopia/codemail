@@ -62,7 +62,7 @@ class EmailParser:
                 "project_name": project_name,
                 "instructions": instructions,
                 "raw_body": body,
-                "sender": email_data.get("from", "")
+                "sender": email_data.get("sender_email", "")  # Use extracted email, not full From field
             }
             
         except Exception as e:

@@ -22,6 +22,33 @@ class EmailReporter:
         self.email_address = email_config.email_address
         self.email_password = email_config.email_password
         
+        # Import whitelist here to avoid circular imports
+        from whitelist import get_email_whitelist
+        self.whitelist = get_email_whitelist()
+        
+    def _is_recipient_whitelisted(self, recipient: str) -> bool:
+        """
+        Check if the recipient email is whitelisted.
+        
+        Args:
+            recipient: Email address to check
+            
+        Returns:
+            True if whitelisted or whitelist not configured, False otherwise
+        """
+        # If no whitelist is configured, allow all (backward compatibility)
+        if self.whitelist is None:
+            logger.debug("No whitelist configured - allowing all recipients")
+            return True
+        
+        # Check if recipient is whitelisted
+        is_whitelisted = self.whitelist.is_recipient_whitelisted(recipient)
+        
+        if not is_whitelisted:
+            logger.warning(f"Recipient '{recipient}' is not in the email whitelist - report will be blocked")
+        
+        return is_whitelisted
+    
     def send_report(self, recipient: str, subject: str, body: str) -> bool:
         """
         Send an email report.
@@ -34,6 +61,11 @@ class EmailReporter:
         Returns:
             True if email sent successfully, False otherwise
         """
+        # Check if recipient is whitelisted before attempting to send
+        if not self._is_recipient_whitelisted(recipient):
+            logger.error(f"Cannot send report to non-whitelisted recipient: {recipient}")
+            return False
+        
         try:
             # Create message container
             msg = MIMEMultipart('alternative')
@@ -83,6 +115,11 @@ class EmailReporter:
         Returns:
             True if email sent successfully, False otherwise
         """
+        # Check whitelist before formatting and sending
+        if not self._is_recipient_whitelisted(recipient):
+            logger.error(f"Cannot send task report to non-whitelisted recipient: {recipient}")
+            return False
+        
         try:
             # Extract task information
             status = task_data.get("status", "unknown")
@@ -167,6 +204,11 @@ class EmailReporter:
         Returns:
             True if email sent successfully, False otherwise
         """
+        # Check whitelist before sending error report
+        if not self._is_recipient_whitelisted(recipient):
+            logger.error(f"Cannot send error report to non-whitelisted recipient: {recipient}")
+            return False
+        
         subject = f"[Codemail] ⚠️ Error Notification - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         body = f"An error occurred in the Codemail system:\n\n{error_message}"
         
@@ -177,6 +219,12 @@ def create_email_reporter():
     """Factory function to create email reporter with validation."""
     try:
         email_config.validate()
+        
+        # Validate whitelist configuration if set
+        is_valid, error_msg = email_config.validate_whitelist()
+        if not is_valid:
+            logger.warning(f"Whitelist configuration warning: {error_msg}")
+        
         return EmailReporter()
     except ValueError as e:
         logger.error(f"Configuration error: {e}")

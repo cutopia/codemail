@@ -151,8 +151,10 @@ class AgentLoop:
                 task["instructions"],
                 task_id=task_id,
                 progress_callback=self._progress_callback,
+                max_iterations=int(os.getenv("MAX_ITERATIONS", "5")),
                 project_name=project_name,
-                workspace_path=project_path
+                workspace_path=project_path,
+                bash_executor=self.bash_executor
             )
             
             # Update task with results
@@ -250,8 +252,10 @@ class AgentLoop:
                     task["instructions"],
                     task_id=task_id,
                     progress_callback=self._progress_callback,
+                    max_iterations=int(os.getenv("MAX_ITERATIONS", "5")),
                     project_name=project_name,
-                    workspace_path=project_path
+                    workspace_path=project_path,
+                    bash_executor=self.bash_executor
                 )
                 
                 # Update task with results
