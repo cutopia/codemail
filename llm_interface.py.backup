@@ -7,8 +7,6 @@ import requests
 import json
 import logging
 import subprocess
-import os
-import re
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from config import llm_config
@@ -116,40 +114,19 @@ class LLMInterface:
         # Build system prompt for coding agent with bash execution capability
         system_prompt = """You are an expert coding assistant. Your task is to analyze the project context and execute the user's instructions.
 
-CRITICAL REQUIREMENTS:
-1. ALL file operations MUST be performed using bash commands wrapped in ```bash code blocks
-2. NEVER write files directly - always use bash commands like echo, cat, or mkdir
-3. After creating a file, verify it exists with ls or cat
-4. If the task involves creating, modifying, or deleting files, you MUST use bash commands
+Follow these guidelines:
+1. First, understand the project structure and requirements
+2. Break down complex tasks into smaller steps
+3. Execute each step carefully using bash commands when needed
+4. Report back with a comprehensive summary of what you did
 
 Bash Command Execution:
-- ALL file operations must be wrapped in ```bash code blocks
-- Commands execute in: {project_context}
-- Always verify file creation with ls -la after writing files
-- Example for creating a file: 
-  ```bash
-  cat > AGENTS.md << 'EOF'
-  # Project Documentation
-  This is the content.
-  EOF
-  ```
+- You can execute bash commands to interact with the filesystem
+- Commands should be wrapped in ```bash code blocks
+- The agent will execute these commands in the project's workspace directory
+- Example: ```bash\nls -la\n```
 
-Required Response Format:
-1. First, analyze the task and plan your approach
-2. Execute bash commands to accomplish the task
-3. Verify results with ls/cat commands
-4. Report back with a comprehensive summary
-
-Example of correct response format:
-```bash
-ls -la /path/to/workspace
-cat > AGENTS.md << 'EOF'
-# Project Documentation
-Content here...
-EOF
-ls -la AGENTS.md
-```
-
+Format your response as:
 ## Summary
 Brief overview of what was accomplished
 
@@ -157,7 +134,7 @@ Brief overview of what was accomplished
 List of steps you executed, including any bash commands run
 
 ## Results
-Final results and any output generated (including file contents if requested)
+Final results and any output generated
 
 ## Errors (if any)
 Any errors encountered during execution"""
@@ -167,9 +144,7 @@ Any errors encountered during execution"""
         
         if project_context:
             user_prompt += f"\n\nPROJECT CONTEXT:\nWorkspace directory: {project_context}\n"
-            user_prompt += "CRITICAL: All file operations MUST be performed using bash commands in this directory.\n"
-            user_prompt += "First, run 'ls -la' to see existing files, then create/modify files as needed.\n"
-            user_prompt += "After creating any file, verify it exists with 'ls -la <filename>' and optionally show its contents with 'cat <filename>'."
+            user_prompt += "All file operations should be performed in this directory."
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -367,31 +342,7 @@ Please review this output and continue with the task if needed. If the task is c
                 # Check if LLM review indicates completion (just "TASK_COMPLETE" with no other content)
                 review_upper = llm_review.upper()
                 
-                # CRITICAL FIX: Only mark complete if we actually have file creation commands that were executed
-                has_file_commands = any(cmd.strip().startswith(('cat >', 'echo >', 'mkdir -p')) for cmd in bash_commands) if bash_commands else False
-                
                 if "TASK_COMPLETE" in review_upper and len(llm_review.strip()) < 50:
-                    # Verify files were actually created before marking complete
-                    if has_file_commands and project_path:
-                        # Check if expected files exist
-                        files_created = []
-                        for cmd in bash_commands:
-                            if 'cat >' in cmd or 'echo >' in cmd:
-                                # Extract filename from command
-                                import re
-                                match = re.search(r'(?:cat|echo)\s+>[^\n]*?["\']?([^"\'\n]+)["\']?', cmd)
-                                if match:
-                                    files_created.append(match.group(1).strip())
-                        
-                        if files_created:
-                            missing_files = [f for f in files_created if not os.path.exists(os.path.join(project_path, f))]
-                            if missing_files:
-                                logger.warning(f"Task marked complete but files are missing: {missing_files}")
-                                # Don't mark complete - continue iterations
-                                current_output = llm_review + "\n\nWARNING: The following files were not created: " + ", ".join(missing_files)
-                                iteration_history.append(current_output)
-                                continue  # Continue to next iteration to create missing files
-                    
                     logger.info("Task marked as complete by LLM after bash execution")
                     
                     current_output = refined_response
