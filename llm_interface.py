@@ -273,6 +273,8 @@ Otherwise, provide an improved version of your response.
 Previous response:
 {current_output}
 
+Bash commands were executed in the workspace. Please review their output and continue if needed.
+
 Your improved response:"""
             
             messages = [
@@ -288,6 +290,7 @@ Your improved response:"""
             # Extract and execute any bash commands from the refined response
             bash_commands = self._extract_bash_commands(refined_response)
             bash_results = []
+            llm_review = None
             
             if bash_executor and bash_commands:
                 for cmd in bash_commands:
@@ -309,78 +312,63 @@ Your improved response:"""
                             "command": cmd,
                             "error": str(e)
                         })
-            
-            # Check if task is complete (be more specific to avoid false positives)
-            response_upper = refined_response.upper()
-            
-            # Look for explicit TASK_COMPLETE at the beginning or in a clear context
-            is_complete = False
-            lines = refined_response.split('\n')
-            
-            # Track if we're inside a markdown code block
-            in_code_block = False
-            
-            for line in lines:
-                line_stripped = line.strip()
-                line_upper = line_stripped.upper()
                 
-                # Check for markdown code block markers (``` at start of line or containing ```)
-                # Handle cases like: ```bash, text ``` more text, ```
-                if '```' in line_stripped:
-                    # Count backticks to determine if this is a code block marker
-                    backtick_count = line_stripped.count('```')
+                # After executing bash commands, ask LLM to review the output and continue
+                logger.debug(f"Executing {len(bash_commands)} bash command(s)")
+                
+                if bash_commands:
+                    review_prompt = f"""I executed the following bash command(s) in the project workspace:
+
+{chr(10).join(f"- {cmd}" for cmd in bash_commands)}
+
+The output was:
+
+{chr(10).join(f"- Command: {r['command']}, Result: {str(r.get('result', {}))}" for r in bash_results)}
+
+Please review this output and continue with the task if needed. If the task is complete, respond with "TASK_COMPLETE". Otherwise, provide your next step or improved response."""
                     
-                    # If it starts with ``` or contains only ```, it's a code block marker
-                    if line_stripped.startswith('```') or backtick_count >= 2:
-                        in_code_block = not in_code_block
-                        continue
-                
-                # Skip lines inside code blocks
-                if in_code_block:
-                    continue
-                
-                # Check for exact TASK_COMPLETE (case-insensitive)
-                if line_upper == "TASK_COMPLETE":
-                    is_complete = True
-                    break
-                
-                # Check for common completion phrases at the start of the line
-                completion_phrases = [
-                    "I HAVE COMPLETED",
-                    "COMPLETED SUCCESSFULLY", 
-                    "TASK COMPLETED",
-                    "ALL TASKS COMPLETED"
-                ]
-                
-                if any(line_upper.startswith(phrase) for phrase in completion_phrases):
-                    is_complete = True
-                    break
+                    messages = [
+                        {"role": "system", "content": "You are a coding assistant that executes bash commands and reviews their output."},
+                        {"role": "user", "content": review_prompt}
+                    ]
+                    
+                    # Get LLM's review of the bash execution
+                    llm_review = self._make_request(messages, max_tokens=1024)
+                    
+                    logger.debug(f"LLM review: {llm_review[:100] if llm_review else 'None'}...")
             
-            # Also check if the entire response (after trimming) is just a completion message
-            if not is_complete:
-                trimmed_response = refined_response.strip()
-                if trimmed_response.upper() == "TASK_COMPLETE":
-                    is_complete = True
-            
-            if is_complete:
-                logger.info("Task marked as complete by LLM")
+            # Use LLM review as basis for next iteration if available and task not complete
+            if llm_review:
+                # Check if LLM review indicates completion (just "TASK_COMPLETE" with no other content)
+                review_upper = llm_review.upper()
                 
-                # Capture final step summary
-                final_summary = f"Task marked complete after {i} refinement iterations. Final output has {len(refined_response)} characters."
-                step_summaries.append({
-                    "step": current_step,
-                    "description": "Task completion review",
-                    "summary": final_summary,
-                    "timestamp": datetime.now().isoformat() if 'datetime' in dir() else None
-                })
-                
-                break  # Exit loop when task is complete
+                if "TASK_COMPLETE" in review_upper and len(llm_review.strip()) < 50:
+                    logger.info("Task marked as complete by LLM after bash execution")
+                    
+                    current_output = refined_response
+                    iteration_history.append(refined_response)
+                    
+                    # Capture final step summary
+                    final_summary = f"Task marked complete after {i} refinement iterations. Final output has {len(current_output)} characters."
+                    step_summaries.append({
+                        "step": current_step,
+                        "description": "Task completion review",
+                        "summary": final_summary,
+                        "timestamp": datetime.now().isoformat() if 'datetime' in dir() else None
+                    })
+                    
+                    break  # Exit loop when task is complete
+                else:
+                    # LLM wants to continue - use the review as basis for next iteration
+                    current_output = llm_review
+            else:
+                # No bash commands or no LLM review - use refined response
+                current_output = refined_response
             
-            current_output = refined_response
-            iteration_history.append(refined_response)
+            iteration_history.append(current_output)
             
             # Capture refinement step summary
-            refinement_summary = f"Refinement iteration {i} completed. Output improved with {len(refined_response)} characters."
+            refinement_summary = f"Refinement iteration {i} completed. Output improved with {len(current_output)} characters."
             step_summaries.append({
                 "step": current_step,
                 "description": f"Refinement iteration {i}",
