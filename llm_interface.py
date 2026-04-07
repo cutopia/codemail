@@ -266,8 +266,30 @@ Any errors encountered during execution"""
                 "step_summaries": []
             }
         
-        # Capture initial step summary
-        initial_summary = f"Initial execution completed. Generated response with {len(result.get('output', ''))} characters."
+        # Capture initial step summary with bash command details
+        bash_commands_executed = result.get("bash_commands_executed", 0)
+        bash_results = result.get("bash_results", [])
+        
+        # Build detailed summary of what happened
+        initial_summary_parts = [f"Initial execution completed. Generated response with {len(result.get('output', ''))} characters."]
+        
+        if bash_commands_executed > 0:
+            initial_summary_parts.append(f"\n**Bash Commands Executed ({bash_commands_executed}):**")
+            for i, cmd_result in enumerate(bash_results, 1):
+                cmd = cmd_result.get("command", "")
+                res = cmd_result.get("result", {})
+                stdout = res.get("stdout", "").strip()[:200] if res else ""  # Truncate long output
+                stderr = res.get("stderr", "").strip()[:200] if res else ""
+                returncode = res.get("returncode", 0)
+                
+                cmd_summary = f"{i}. `{cmd}`"
+                if returncode == 0:
+                    cmd_summary += f" ✅ (output: {stdout})"
+                else:
+                    cmd_summary += f" ❌ (error: {stderr})"
+                initial_summary_parts.append(cmd_summary)
+        
+        initial_summary = "\n".join(initial_summary_parts)
         step_summaries.append({
             "step": current_step,
             "description": "Initial task execution",
@@ -397,8 +419,29 @@ Please review this output and continue with the task if needed. If the task is c
                     current_output = refined_response
                     iteration_history.append(refined_response)
                     
-                    # Capture final step summary
-                    final_summary = f"Task marked complete after {i} refinement iterations. Final output has {len(current_output)} characters."
+                    # Capture final step summary with bash command details
+                    final_summary_parts = [f"Task marked complete after {i} refinement iterations."]
+                    
+                    if bash_commands:
+                        final_summary_parts.append(f"\n**Final Bash Commands Executed ({len(bash_commands)}):**")
+                        for j, cmd_result in enumerate(bash_results, 1):
+                            cmd = cmd_result.get("command", "")
+                            res = cmd_result.get("result", {})
+                            stdout = res.get("stdout", "").strip()[:200] if res else ""  # Truncate long output
+                            stderr = res.get("stderr", "").strip()[:200] if res else ""
+                            returncode = res.get("returncode", 0)
+                            
+                            cmd_summary = f"{j}. `{cmd}`"
+                            if returncode == 0:
+                                cmd_summary += f" ✅ (output: {stdout})"
+                            else:
+                                cmd_summary += f" ❌ (error: {stderr})"
+                            final_summary_parts.append(cmd_summary)
+                    
+                    final_output_chars = len(current_output)
+                    final_summary_parts.append(f"\n**Final Output:** {final_output_chars} characters")
+                    
+                    final_summary = "\n".join(final_summary_parts)
                     step_summaries.append({
                         "step": current_step,
                         "description": "Task completion review",
@@ -416,8 +459,31 @@ Please review this output and continue with the task if needed. If the task is c
             
             iteration_history.append(current_output)
             
-            # Capture refinement step summary
-            refinement_summary = f"Refinement iteration {i} completed. Output improved with {len(current_output)} characters."
+            # Capture refinement step summary with bash command details
+            refinement_summary_parts = [f"Refinement iteration {i} completed."]
+            
+            if bash_commands:
+                refinement_summary_parts.append(f"\n**Bash Commands Executed ({len(bash_commands)}):**")
+                for j, cmd_result in enumerate(bash_results, 1):
+                    cmd = cmd_result.get("command", "")
+                    res = cmd_result.get("result", {})
+                    stdout = res.get("stdout", "").strip()[:200] if res else ""  # Truncate long output
+                    stderr = res.get("stderr", "").strip()[:200] if res else ""
+                    returncode = res.get("returncode", 0)
+                    
+                    cmd_summary = f"{j}. `{cmd}`"
+                    if returncode == 0:
+                        cmd_summary += f" ✅ (output: {stdout})"
+                    else:
+                        cmd_summary += f" ❌ (error: {stderr})"
+                    refinement_summary_parts.append(cmd_summary)
+            
+            # Add LLM review if available
+            if llm_review:
+                review_preview = llm_review.strip()[:300]
+                refinement_summary_parts.append(f"\n**LLM Review:**\n{review_preview}")
+            
+            refinement_summary = "\n".join(refinement_summary_parts)
             step_summaries.append({
                 "step": current_step,
                 "description": f"Refinement iteration {i}",
