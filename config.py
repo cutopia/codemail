@@ -82,6 +82,8 @@ class LLMConfig:
     def __init__(self):
         self.endpoint = os.getenv("LLM_ENDPOINT", "http://127.0.0.1:1234/v1/models")
         self.api_key = os.getenv("LLM_API_KEY", "dummy_key")
+        # Context window configuration - default to very high value for modern LLMs
+        self.max_tokens = int(os.getenv("LLM_MAX_TOKENS", "262144"))
 
 
 class DatabaseConfig:

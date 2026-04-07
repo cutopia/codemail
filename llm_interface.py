@@ -23,13 +23,13 @@ class LLMInterface:
         self.endpoint = llm_config.endpoint
         self.api_key = llm_config.api_key
         
-    def _make_request(self, messages: List[Dict[str, str]], max_tokens: int = 2048) -> Optional[str]:
+    def _make_request(self, messages: List[Dict[str, str]], max_tokens: int = None) -> Optional[str]:
         """
         Make a request to the LM Studio API.
         
         Args:
             messages: List of message dictionaries with 'role' and 'content'
-            max_tokens: Maximum tokens in response
+            max_tokens: Maximum tokens in response (uses config default if None)
             
         Returns:
             LLM response text or None if error
@@ -46,9 +46,12 @@ class LLMInterface:
                 "Authorization": f"Bearer {self.api_key}"
             }
             
+            # Use config default if not specified
+            token_limit = max_tokens if max_tokens is not None else llm_config.max_tokens
+            
             data = {
                 "messages": messages,
-                "max_tokens": max_tokens,
+                "max_tokens": token_limit,
                 "temperature": 0.7
             }
             
@@ -176,8 +179,8 @@ Any errors encountered during execution"""
             {"role": "user", "content": user_prompt}
         ]
         
-        # Make LLM request
-        response = self._make_request(messages)
+        # Make LLM request with configurable max_tokens
+        response = self._make_request(messages, max_tokens=llm_config.max_tokens)
         
         if not response:
             return {
@@ -329,7 +332,8 @@ Your improved response:"""
                 {"role": "user", "content": refine_prompt}
             ]
             
-            refined_response = self._make_request(messages)
+            # Use configurable max_tokens for refinement iterations
+            refined_response = self._make_request(messages, max_tokens=llm_config.max_tokens)
             
             if not refined_response:
                 break
@@ -379,8 +383,8 @@ Please review this output and continue with the task if needed. If the task is c
                         {"role": "user", "content": review_prompt}
                     ]
                     
-                    # Get LLM's review of the bash execution
-                    llm_review = self._make_request(messages, max_tokens=1024)
+                    # Get LLM's review of the bash execution with configurable max_tokens
+                    llm_review = self._make_request(messages, max_tokens=llm_config.max_tokens)
                     
                     logger.debug(f"LLM review: {llm_review[:100] if llm_review else 'None'}...")
             
