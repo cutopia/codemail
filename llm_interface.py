@@ -120,15 +120,20 @@ class LLMInterface:
         system_prompt = """You are an expert coding assistant. Your task is to analyze the project context and execute the user's instructions.
 
 CRITICAL REQUIREMENTS:
-1. ALL file operations MUST be performed using bash commands wrapped in ```bash code blocks
-2. NEVER write files directly - always use bash commands like echo, cat, or mkdir
-3. After creating a file, verify it exists with ls or cat
-4. If the task involves creating, modifying, or deleting files, you MUST use bash commands
+1. ALL tasks MUST be accomplished using bash commands wrapped in ```bash code blocks
+2. NEVER write files directly - always use bash commands like echo, cat, mkdir, cp, mv, rm, etc.
+3. After any file operation, verify it exists with ls or cat
+4. For listing files, ALWAYS use 'ls -la' command
+5. ALL commands execute in the project workspace directory
 
 Bash Command Execution:
-- ALL file operations must be wrapped in ```bash code blocks
+- ALL actions must be wrapped in ```bash code blocks
 - Commands execute in: {project_context}
-- Always verify file creation with ls -la after writing files
+- Always verify file creation/modification with ls -la after operations
+- Example for listing files: 
+  ```bash
+  ls -la /path/to/workspace
+  ```
 - Example for creating a file: 
   ```bash
   cat > AGENTS.md << 'EOF'
@@ -143,7 +148,12 @@ Required Response Format:
 3. Verify results with ls/cat commands
 4. Report back with a comprehensive summary
 
-Example of correct response format:
+Example of correct response format for listing files:
+```bash
+ls -la /path/to/workspace
+```
+
+Example of correct response format for creating/modifying files:
 ```bash
 ls -la /path/to/workspace
 cat > AGENTS.md << 'EOF'
@@ -151,6 +161,7 @@ cat > AGENTS.md << 'EOF'
 Content here...
 EOF
 ls -la AGENTS.md
+cat AGENTS.md
 ```
 
 ## Summary
@@ -170,9 +181,11 @@ Any errors encountered during execution"""
         
         if project_context:
             user_prompt += f"\n\nPROJECT CONTEXT:\nWorkspace directory: {project_context}\n"
-            user_prompt += "CRITICAL: All file operations MUST be performed using bash commands in this directory.\n"
-            user_prompt += "First, run 'ls -la' to see existing files, then create/modify files as needed.\n"
-            user_prompt += "After creating any file, verify it exists with 'ls -la <filename>' and optionally show its contents with 'cat <filename>'."
+            user_prompt += "CRITICAL: ALL tasks MUST be accomplished using bash commands in this directory.\n"
+            user_prompt += "For listing files, use 'ls -la'.\n"
+            user_prompt += "For creating/modifying files, use 'cat > filename' or similar bash commands.\n"
+            user_prompt += "After any file operation, verify it exists with 'ls -la <filename>' and optionally show its contents with 'cat <filename>'.\n"
+            user_prompt += "Wrap ALL bash commands in ```bash code blocks in your response."
         
         messages = [
             {"role": "system", "content": system_prompt},

@@ -382,18 +382,21 @@ class TaskQueue:
             state: Dictionary of state information
             
         Returns:
-            True if successful, False otherwise
+            True if successful, False otherwise (gracefully handles missing Redis)
         """
-        if not self.redis:
+        # Gracefully handle missing Redis - this is optional functionality
+        redis_client = self.redis
+        if not redis_client:
+            logger.debug(f"Redis not available, skipping task state update for {task_id}")
             return False
         
         try:
             key = f"task:{task_id}:state"
-            self.redis.setex(key, 3600, json.dumps(state))  # 1 hour TTL
+            redis_client.setex(key, 3600, json.dumps(state))  # 1 hour TTL
             logger.debug(f"Set state for task {task_id}")
             return True
         except Exception as e:
-            logger.warning(f"Failed to set task state (Redis may not be available): {e}")
+            logger.debug(f"Failed to set task state (Redis may not be available): {e}")
             return False
     
     def get_task_state(self, task_id: str) -> Optional[Dict[str, Any]]:
@@ -434,9 +437,12 @@ class TaskQueue:
             status: Current status
             
         Returns:
-            True if successful, False otherwise
+            True if successful, False otherwise (gracefully handles missing Redis)
         """
-        if not self.redis:
+        # Gracefully handle missing Redis - this is optional functionality
+        redis_client = self.redis
+        if not redis_client:
+            logger.debug(f"Redis not available, skipping task progress update for {task_id}")
             return False
         
         try:

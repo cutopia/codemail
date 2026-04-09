@@ -158,6 +158,32 @@ class EmailReporter:
                     # Fallback if no step summaries
                     report_lines.append("\nNo detailed step information available.")
                 
+                # Include bash command results if available in task_data
+                bash_results = task_data.get("bash_results", [])
+                if bash_results:
+                    report_lines.append("\n## Bash Command Results:")
+                    for j, result in enumerate(bash_results, 1):
+                        cmd = result.get("command", "")
+                        res = result.get("result", {})
+                        stdout = res.get("stdout", "").strip()
+                        stderr = res.get("stderr", "").strip()
+                        returncode = res.get("returncode", -1)
+                        
+                        report_lines.append(f"\n### Command {j}: `{cmd}`")
+                        if returncode == 0:
+                            report_lines.append("**Output:**")
+                            # Show full output (not truncated like in step summaries)
+                            if stdout:
+                                report_lines.append(f"```\n{stdout}\n```")
+                            else:
+                                report_lines.append("(no output)")
+                        else:
+                            report_lines.append("**Error:**")
+                            if stderr:
+                                report_lines.append(f"```\n{stderr}\n```")
+                            else:
+                                report_lines.append("(no error message)")
+                
                 report_lines.extend([
                     "",
                     "## Results:",
