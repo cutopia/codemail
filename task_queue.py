@@ -615,8 +615,3 @@ class TaskQueue:
 def create_task_queue():
     """Factory function to create task queue."""
     return TaskQueue()
-
-
-def create_task_queue():
-    """Factory function to create task queue."""
-    return TaskQueue()
