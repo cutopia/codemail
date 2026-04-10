@@ -164,6 +164,53 @@ class WorkspaceManager:
         """
         import subprocess
         
+        # CRITICAL FIX: Validate that the command is actually a bash command, not natural language
+        # Skip if it contains natural language patterns
+        natural_language_indicators = [
+            r'^I\s+(don\'t|do\s+not)\s+hav',
+            r'^Please\s+clarif',
+            r'^To\s+accomplish',
+            r'^Once\s+clarifi',
+            r'^You\s+are\s+a',
+            r'^CRITICAL\s+REQUIREMENTS',
+            r'^Bash\s+Command',
+            r'^##\s+Summary',
+            r'^##\s+Steps',
+            r'^##\s+Results',
+            r'^##\s+Errors',
+        ]
+        
+        import re
+        for indicator in natural_language_indicators:
+            if re.match(indicator, command, re.IGNORECASE | re.MULTILINE):
+                logger.warning(f"Skipping natural language response as bash command: {command[:50]}...")
+                return {
+                    "stdout": "",
+                    "stderr": f"Error: Natural language response detected and not executed: {command[:100]}...",
+                    "returncode": -1,
+                    "command": command,
+                    "workspace": self.get_project_path(project_name),
+                    "timestamp": datetime.now().isoformat()
+                }
+        
+        # Also check for common LLM response patterns
+        if any(phrase in command.lower() for phrase in [
+            'i don\'t have',
+            'please clarify',
+            'to accomplish this',
+            'once clarified',
+            'you are a coding assistant'
+        ]):
+            logger.warning(f"Skipping natural language response as bash command: {command[:50]}...")
+            return {
+                "stdout": "",
+                "stderr": f"Error: Natural language response detected and not executed: {command[:100]}...",
+                "returncode": -1,
+                "command": command,
+                "workspace": self.get_project_path(project_name),
+                "timestamp": datetime.now().isoformat()
+            }
+        
         project_path = self.get_project_path(project_name)
         
         # Ensure workspace exists

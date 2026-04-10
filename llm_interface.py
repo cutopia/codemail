@@ -84,7 +84,7 @@ class LLMInterface:
             text: Text potentially containing ```bash code blocks
             
         Returns:
-            List of extracted bash command strings
+            List of extracted bash command strings (only valid bash commands)
         """
         import re
         
@@ -96,7 +96,55 @@ class LLMInterface:
         for match in matches:
             # Clean up the command (remove leading/trailing whitespace)
             cmd = match.strip()
-            if cmd:
+            
+            # Skip if empty
+            if not cmd:
+                continue
+            
+            # CRITICAL FIX: Validate that this is actually a bash command, not natural language
+            # Natural language responses often contain phrases like "I don't have", "Please clarify",
+            # "To accomplish this", etc. We should filter these out.
+            
+            # Check for common natural language patterns that indicate non-command text
+            natural_language_indicators = [
+                r'^I\s+(don\'t|do\s+not)\s+hav',
+                r'^Please\s+clarif',
+                r'^To\s+accomplish',
+                r'^Once\s+clarifi',
+                r'^You\s+are\s+a',
+                r'^CRITICAL\s+REQUIREMENTS',
+                r'^Bash\s+Command',
+                r'^Required\s+Response',
+                r'^##\s+Summary',
+                r'^##\s+Steps',
+                r'^##\s+Results',
+                r'^##\s+Errors',
+            ]
+            
+            is_natural_language = False
+            for indicator in natural_language_indicators:
+                if re.match(indicator, cmd, re.IGNORECASE | re.MULTILINE):
+                    is_natural_language = True
+                    break
+            
+            # Also check for common LLM response patterns that aren't commands
+            if not is_natural_language:
+                # Check if the text contains mostly natural language (has many spaces between words)
+                # vs. being a concise command
+                word_count = len(cmd.split())
+                
+                # If it's very long and has natural language structure, skip it
+                if word_count > 20 and any(phrase in cmd.lower() for phrase in [
+                    'i don\'t have',
+                    'please clarify',
+                    'to accomplish this',
+                    'once clarified',
+                    'you are a coding assistant'
+                ]):
+                    is_natural_language = True
+            
+            # Only add if it's not natural language
+            if not is_natural_language:
                 commands.append(cmd)
         
         return commands
@@ -584,6 +632,51 @@ class BashExecutor:
         Returns:
             Dictionary with execution results
         """
+        # CRITICAL FIX: Validate that the command is actually a bash command, not natural language
+        import re
+        
+        natural_language_indicators = [
+            r'^I\s+(don\'t|do\s+not)\s+hav',
+            r'^Please\s+clarif',
+            r'^To\s+accomplish',
+            r'^Once\s+clarifi',
+            r'^You\s+are\s+a',
+            r'^CRITICAL\s+REQUIREMENTS',
+            r'^Bash\s+Command',
+            r'^##\s+Summary',
+            r'^##\s+Steps',
+            r'^##\s+Results',
+            r'^##\s+Errors',
+        ]
+        
+        for indicator in natural_language_indicators:
+            if re.match(indicator, command, re.IGNORECASE | re.MULTILINE):
+                logger.warning(f"Skipping natural language response as bash command: {command[:50]}...")
+                return {
+                    "stdout": "",
+                    "stderr": f"Error: Natural language response detected and not executed: {command[:100]}...",
+                    "returncode": -1,
+                    "command": command,
+                    "timestamp": datetime.now().isoformat()
+                }
+        
+        # Also check for common LLM response patterns
+        if any(phrase in command.lower() for phrase in [
+            'i don\'t have',
+            'please clarify',
+            'to accomplish this',
+            'once clarified',
+            'you are a coding assistant'
+        ]):
+            logger.warning(f"Skipping natural language response as bash command: {command[:50]}...")
+            return {
+                "stdout": "",
+                "stderr": f"Error: Natural language response detected and not executed: {command[:100]}...",
+                "returncode": -1,
+                "command": command,
+                "timestamp": datetime.now().isoformat()
+            }
+        
         if self.workspace_manager:
             return self.workspace_manager.execute_in_workspace(project_name, command)
         else:
