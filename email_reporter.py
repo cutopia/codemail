@@ -190,6 +190,20 @@ class EmailReporter:
                     output
                 ])
                 
+                # Add file verification information if available
+                step_summaries = task_data.get("step_summaries", [])
+                if step_summaries:
+                    last_summary = step_summaries[-1] if step_summaries else None
+                    summary_text = last_summary.get("summary", "") if last_summary else ""
+                    
+                    # Check if any files were mentioned in the final summary
+                    import re
+                    file_mentions = re.findall(r'`?([A-Za-z_]+\.(?:md|txt|py|json))`?', summary_text)
+                    if file_mentions:
+                        report_lines.append("\n## Files Created/Modified:")
+                        for filename in set(file_mentions):
+                            report_lines.append(f"- {filename}")
+                
                 if iterations > 0:
                     report_lines.append(f"\nIterations: {iterations}")
                     

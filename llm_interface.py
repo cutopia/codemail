@@ -149,6 +149,80 @@ class LLMInterface:
         
         return commands
     
+    def _extract_bash_commands_v2(self, text: str) -> List[str]:
+        """
+        Extract bash commands from markdown code blocks (improved version).
+        
+        This version extracts individual commands from heredoc blocks.
+        
+        Args:
+            text: Text potentially containing ```bash code blocks
+            
+        Returns:
+            List of extracted bash command strings
+        """
+        import re
+        
+        # Pattern to match ```bash ... ``` or ``` ... ``` blocks
+        pattern = r'```(?:bash)?\s*([\s\S]*?)```'
+        matches = re.findall(pattern, text)
+        
+        commands = []
+        for match in matches:
+            lines = match.strip().split('\n')
+            
+            # Process each line
+            for line in lines:
+                line = line.strip()
+                
+                # Skip empty lines and EOF markers
+                if not line or line == 'EOF':
+                    continue
+                
+                # Skip heredoc start markers like cat > file << 'EOF'
+                if re.match(r'^(cat|echo)\s+>[^\n]*<<\s*[\'"]?EOF[\'"]?', line):
+                    # Extract just the command part before the heredoc
+                    cmd_part = re.split(r'\s*<<\s*', line)[0].strip()
+                    if cmd_part and not any(ind in cmd_part.lower() for ind in ['i don\'t', 'please clarify']):
+                        commands.append(cmd_part)
+                    continue
+                
+                # Skip lines that are part of heredoc content (not actual commands)
+                # Skip comment lines, variable assignments, and markdown-style list items
+                if re.match(r'^[A-Za-z_]+\s+=\s+', line) or re.match(r'^#', line):
+                    continue
+                
+                # Check for natural language patterns
+                natural_language_indicators = [
+                    r'^I\s+(don\'t|do\s+not)\s+hav',
+                    r'^Please\s+clarif',
+                    r'^To\s+accomplish',
+                    r'^Once\s+clarifi',
+                    r'^You\s+a\s+a',
+                    r'^CRITICAL\s+REQUIREMENTS',
+                ]
+                
+                is_natural_language = False
+                for indicator in natural_language_indicators:
+                    if re.match(indicator, line, re.IGNORECASE):
+                        is_natural_language = True
+                        break
+                
+                # Skip lines that look like heredoc content (not commands)
+                # These are typically indented or start with special characters
+                if re.match(r'^\s', line) and not re.match(r'^[a-zA-Z]', line):
+                    continue
+                
+                # Skip markdown-style list items
+                if re.match(r'^[-*]\s+', line):
+                    continue
+                
+                # Only add if it's not natural language and looks like a command
+                if not is_natural_language and len(line.split()) <= 15:
+                    commands.append(line)
+        
+        return commands
+    
     def execute_task(self, instructions: str, project_context: Optional[str] = None,
                     bash_executor=None) -> Dict:
         """
@@ -212,6 +286,8 @@ ls -la AGENTS.md
 cat AGENTS.md
 ```
 
+IMPORTANT: If the task involves creating or modifying files, you MUST include bash commands to create those files. Do not just describe what you would do - actually execute the commands.
+
 ## Summary
 Brief overview of what was accomplished
 
@@ -234,6 +310,19 @@ Any errors encountered during execution"""
             user_prompt += "For creating/modifying files, use 'cat > filename' or similar bash commands.\n"
             user_prompt += "After any file operation, verify it exists with 'ls -la <filename>' and optionally show its contents with 'cat <filename>'.\n"
             user_prompt += "Wrap ALL bash commands in ```bash code blocks in your response."
+            
+            # CRITICAL: Add explicit file creation example based on instructions
+            if any(keyword in instructions.lower() for keyword in ['create', 'generate', 'write', '.md', '.txt', '.py']):
+                user_prompt += "\n\nEXAMPLE FILE CREATION COMMAND:\n"
+                user_prompt += "If you need to create a file, use the following format:\n"
+                user_prompt += "```bash\n"
+                user_prompt += "cat > AGENTS.md << 'EOF'\n"
+                user_prompt += "# Project Documentation\n"
+                user_prompt += "Content goes here...\n"
+                user_prompt += "EOF\n"
+                user_prompt += "ls -la AGENTS.md\n"
+                user_prompt += "cat AGENTS.md\n"
+                user_prompt += "```\n"
         
         messages = [
             {"role": "system", "content": system_prompt},

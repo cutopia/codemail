@@ -285,6 +285,32 @@ class AgentLoop:
                 
                 # Update task with results
                 completed_at = datetime.now()
+                
+                # CRITICAL FIX: Verify that expected files were actually created
+                if result.get("status") == "completed" and project_path:
+                    # Check if the task involved file creation (instructions contain keywords)
+                    instructions_lower = task["instructions"].lower()
+                    file_keywords = ['create', 'generate', 'write', 'file', '.md', '.txt', '.py', '.json']
+                    
+                    if any(keyword in instructions_lower for keyword in file_keywords):
+                        # Extract expected filenames from instructions
+                        import re
+                        # Look for patterns like "AGENTS.md", "README.md", etc.
+                        potential_files = re.findall(r'([A-Za-z_]+\.(?:md|txt|py|json))', task["instructions"])
+                        
+                        if potential_files:
+                            missing_files = []
+                            for filename in potential_files:
+                                filepath = os.path.join(project_path, filename)
+                                if not os.path.exists(filepath):
+                                    missing_files.append(filename)
+                            
+                            if missing_files:
+                                logger.warning(f"Task marked complete but files were not created: {missing_files}")
+                                # Update status to failed since expected files don't exist
+                                result["status"] = "failed"
+                                result["error"] = f"Expected files were not created: {', '.join(missing_files)}"
+                
                 self.queue.update_task_status(
                     task_id=task_id,
                     status=result["status"],
