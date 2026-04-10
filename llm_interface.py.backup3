@@ -127,20 +127,14 @@ class LLMInterface:
                     is_natural_language = True
                     break
             
-            # CRITICAL FIX: Handle heredoc commands specially - they contain natural language but are valid bash
-            is_heredoc_command = False
-            if '<<' in cmd and ('cat >' in cmd or 'echo >' in cmd):
-                is_heredoc_command = True
-            
             # Also check for common LLM response patterns that aren't commands
-            if not is_natural_language and not is_heredoc_command:
+            if not is_natural_language:
                 # Check if the text contains mostly natural language (has many spaces between words)
                 # vs. being a concise command
                 word_count = len(cmd.split())
                 
                 # If it's very long and has natural language structure, skip it
-                # BUT allow heredoc commands which naturally have more content
-                if not is_heredoc_command and word_count > 20 and any(phrase in cmd.lower() for phrase in [
+                if word_count > 20 and any(phrase in cmd.lower() for phrase in [
                     'i don\'t have',
                     'please clarify',
                     'to accomplish this',
@@ -149,8 +143,8 @@ class LLMInterface:
                 ]):
                     is_natural_language = True
             
-            # Only add if it's not natural language (or is a heredoc command)
-            if not is_natural_language or is_heredoc_command:
+            # Only add if it's not natural language
+            if not is_natural_language:
                 commands.append(cmd)
         
         return commands
@@ -363,19 +357,6 @@ Any errors encountered during execution"""
                     # Add command output to response for LLM to see
                     if result.get("returncode", 0) == 0:
                         response += f"\n\n[Bash Command Output]\nCommand: {cmd}\nOutput:\n{result.get('stdout', '')}"
-                        
-                        # CRITICAL FIX: Verify file was actually created
-                        if 'cat >' in cmd or 'echo >' in cmd:
-                            import re
-                            match = re.search(r'(?:cat|echo)\s+>[^\n]*?["\']?([^"\'\n<>|;]+)["\']?', cmd)
-                            if match:
-                                filename = match.group(1).strip()
-                                workspace_path = project_context or '.'
-                                filepath = os.path.join(workspace_path, filename) if not os.path.isabs(filename) else filename
-                                if os.path.exists(filepath):
-                                    response += f"\n[File Created Successfully: {filename}]"
-                                else:
-                                    response += f"\n[WARNING: File {filename} may not have been created properly]"
                     else:
                         response += f"\n\n[Bash Command Error]\nCommand: {cmd}\nError:\n{result.get('stderr', '')}"
                         
@@ -574,11 +555,7 @@ Please review this output and continue with the task if needed. If the task is c
                             if 'cat >' in cmd or 'echo >' in cmd:
                                 # Extract filename from command
                                 import re
-                                # Try heredoc pattern first, then simple redirection
-                                match = re.search(r'(?:cat|echo)\s+>[^\n]*?["\']?([^"\'\n<>|;\s]+)["\']?', cmd)
-                                if not match:
-                                    # For echo "content" > file.txt format
-                                    match = re.search(r'>(?:\s+|\s*"[^"]*"\s*)?([^"\'\n<>|;\s]+)', cmd)
+                                match = re.search(r'(?:cat|echo)\s+>[^\n]*?["\']?([^"\'\n]+)["\']?', cmd)
                                 if match:
                                     files_created.append(match.group(1).strip())
                         

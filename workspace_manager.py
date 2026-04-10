@@ -220,6 +220,8 @@ class WorkspaceManager:
         try:
             logger.info(f"Executing command in workspace '{project_name}': {command}")
             
+            logger.info(f"Executing in workspace '{project_name}': {command}")
+            
             result = subprocess.run(
                 command,
                 shell=True,
@@ -228,6 +230,22 @@ class WorkspaceManager:
                 text=True,
                 timeout=300  # 5 minute timeout
             )
+            
+            # CRITICAL FIX: Verify file creation for common file operations
+            if 'cat >' in command or 'echo >' in command:
+                import re
+                # Try heredoc pattern first, then simple redirection
+                match = re.search(r'(?:cat|echo)\s+>[^\n]*?["\']?([^"\'\n<>|;\s]+)["\']?', command)
+                if not match:
+                    # For echo "content" > file.txt format
+                    match = re.search(r'>(?:\s+|\s*"[^"]*"\s*)?([^"\'\n<>|;\s]+)', command)
+                if match:
+                    filename = match.group(1).strip()
+                    filepath = os.path.join(project_path, filename)
+                    if os.path.exists(filepath):
+                        logger.info(f"File created successfully: {filename}")
+                    else:
+                        logger.warning(f"Command executed but file may not exist: {filename}")
             
             output = {
                 "stdout": result.stdout,
