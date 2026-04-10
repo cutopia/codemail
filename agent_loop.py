@@ -171,16 +171,112 @@ class AgentLoop:
                     
                     if potential_files:
                         missing_files = []
+                        file_verification_details = []  # Detailed verification info
+                        
                         for filename in potential_files:
                             filepath = os.path.join(project_path, filename)
-                            if not os.path.exists(filepath):
+                            exists = os.path.exists(filepath)
+                            
+                            # Gather detailed information about the file attempt
+                            file_info = {
+                                "filename": filename,
+                                "expected_path": filepath,
+                                "exists": exists,
+                                "attempts": []
+                            }
+                            
+                            # Check bash results for attempts to create this file
+                            if result.get("bash_results"):
+                                for cmd_result in result["bash_results"]:
+                                    cmd = cmd_result.get("command", "")
+                                    res = cmd_result.get("result", {})
+                                    
+                                    # Look for commands that might create this file
+                                    if filename in cmd and ('cat >' in cmd or 'echo >' in cmd):
+                                        file_info["attempts"].append({
+                                            "command": cmd,
+                                            "success": res.get("returncode", -1) == 0,
+                                            "stdout": res.get("stdout", ""),
+                                            "stderr": res.get("stderr", "")
+                                        })
+                            
+                            # Check if file exists and get basic info
+                            if exists:
+                                try:
+                                    file_info["size"] = os.path.getsize(filepath)
+                                    file_info["modified"] = os.path.getmtime(filepath)
+                                except Exception:
+                                    pass
+                            else:
                                 missing_files.append(filename)
+                            
+                            file_verification_details.append(file_info)
                         
                         if missing_files:
                             logger.warning(f"Task marked complete but files were not created: {missing_files}")
-                            # Update status to failed since expected files don't exist
+                            
+                            # Build comprehensive error message with diagnostic details
+                            error_parts = [f"Expected files were not created: {', '.join(missing_files)}"]
+                            error_parts.append("\n## File Verification Details:")
+                            
+                            for file_info in file_verification_details:
+                                filename = file_info["filename"]
+                                exists = file_info["exists"]
+                                
+                                if exists:
+                                    size = file_info.get("size", "unknown")
+                                    error_parts.append(f"- `{filename}`: ✅ EXISTS (size: {size} bytes)")
+                                else:
+                                    error_parts.append(f"- `{filename}`: ❌ MISSING")
+                                    
+                                    # Add creation attempts
+                                    attempts = file_info.get("attempts", [])
+                                    if attempts:
+                                        error_parts.append(f"  Attempts to create:")
+                                        for attempt in attempts:
+                                            cmd = attempt["command"]
+                                            success = attempt["success"]
+                                            stdout = attempt.get("stdout", "")[:200]  # Truncate long output
+                                            stderr = attempt.get("stderr", "")
+                                            
+                                            error_parts.append(f"    - Command: `{cmd}`")
+                                            if not success:
+                                                error_parts.append(f"      Error: {stderr[:300]}")  # Show error details
+                                            else:
+                                                error_parts.append(f"      Output: {stdout[:200]}")
+                                    else:
+                                        error_parts.append("  No creation commands found in execution log")
+                            
+                            # Include full bash results for debugging
+                            if result.get("bash_results"):
+                                error_parts.append("\n## All Bash Commands Executed:")
+                                for idx, cmd_result in enumerate(result["bash_results"], 1):
+                                    cmd = cmd_result.get("command", "")
+                                    res = cmd_result.get("result", {})
+                                    returncode = res.get("returncode", -1)
+                                    
+                                    if returncode == 0:
+                                        error_parts.append(f"### Command {idx}: `{cmd}` ✅")
+                                    else:
+                                        error_parts.append(f"### Command {idx}: `{cmd}` ❌ (exit code: {returncode})")
+                                    
+                                    stdout = res.get("stdout", "").strip()
+                                    stderr = res.get("stderr", "").strip()
+                                    
+                                    if stdout:
+                                        error_parts.append(f"**STDOUT:**\n```\n{stdout[:500]}\n```")  # Truncate
+                                    if stderr:
+                                        error_parts.append(f"**STDERR:**\n```\n{stderr[:500]}\n```")
+                            
+                            # Include the full LLM output for context
+                            llm_output = result.get("output", "")
+                            if llm_output:
+                                error_parts.append("\n## Full LLM Response:")
+                                error_parts.append(f"```\n{llm_output[:1000]}\n```")  # Truncate to avoid massive emails
+                            
+                            # Update status and include comprehensive error details
                             result["status"] = "failed"
-                            result["error"] = f"Expected files were not created: {', '.join(missing_files)}"
+                            result["error"] = "\n".join(error_parts)
             
             # Update task with results
             completed_at = datetime.now()
@@ -300,16 +396,112 @@ class AgentLoop:
                         
                         if potential_files:
                             missing_files = []
+                            file_verification_details = []  # Detailed verification info
+                            
                             for filename in potential_files:
                                 filepath = os.path.join(project_path, filename)
-                                if not os.path.exists(filepath):
+                                exists = os.path.exists(filepath)
+                                
+                                # Gather detailed information about the file attempt
+                                file_info = {
+                                    "filename": filename,
+                                    "expected_path": filepath,
+                                    "exists": exists,
+                                    "attempts": []
+                                }
+                                
+                                # Check bash results for attempts to create this file
+                                if result.get("bash_results"):
+                                    for cmd_result in result["bash_results"]:
+                                        cmd = cmd_result.get("command", "")
+                                        res = cmd_result.get("result", {})
+                                        
+                                        # Look for commands that might create this file
+                                        if filename in cmd and ('cat >' in cmd or 'echo >' in cmd):
+                                            file_info["attempts"].append({
+                                                "command": cmd,
+                                                "success": res.get("returncode", -1) == 0,
+                                                "stdout": res.get("stdout", ""),
+                                                "stderr": res.get("stderr", "")
+                                            })
+                                
+                                # Check if file exists and get basic info
+                                if exists:
+                                    try:
+                                        file_info["size"] = os.path.getsize(filepath)
+                                        file_info["modified"] = os.path.getmtime(filepath)
+                                    except Exception:
+                                        pass
+                                else:
                                     missing_files.append(filename)
+                                
+                                file_verification_details.append(file_info)
                             
                             if missing_files:
                                 logger.warning(f"Task marked complete but files were not created: {missing_files}")
-                                # Update status to failed since expected files don't exist
+                                
+                                # Build comprehensive error message with diagnostic details
+                                error_parts = [f"Expected files were not created: {', '.join(missing_files)}"]
+                                error_parts.append("\n## File Verification Details:")
+                                
+                                for file_info in file_verification_details:
+                                    filename = file_info["filename"]
+                                    exists = file_info["exists"]
+                                    
+                                    if exists:
+                                        size = file_info.get("size", "unknown")
+                                        error_parts.append(f"- `{filename}`: ✅ EXISTS (size: {size} bytes)")
+                                    else:
+                                        error_parts.append(f"- `{filename}`: ❌ MISSING")
+                                        
+                                        # Add creation attempts
+                                        attempts = file_info.get("attempts", [])
+                                        if attempts:
+                                            error_parts.append(f"  Attempts to create:")
+                                            for attempt in attempts:
+                                                cmd = attempt["command"]
+                                                success = attempt["success"]
+                                                stdout = attempt.get("stdout", "")[:200]  # Truncate long output
+                                                stderr = attempt.get("stderr", "")
+                                                
+                                                error_parts.append(f"    - Command: `{cmd}`")
+                                                if not success:
+                                                    error_parts.append(f"      Error: {stderr[:300]}")  # Show error details
+                                                else:
+                                                    error_parts.append(f"      Output: {stdout[:200]}")
+                                        else:
+                                            error_parts.append("  No creation commands found in execution log")
+                                
+                                # Include full bash results for debugging
+                                if result.get("bash_results"):
+                                    error_parts.append("\n## All Bash Commands Executed:")
+                                    for idx, cmd_result in enumerate(result["bash_results"], 1):
+                                        cmd = cmd_result.get("command", "")
+                                        res = cmd_result.get("result", {})
+                                        returncode = res.get("returncode", -1)
+                                        
+                                        if returncode == 0:
+                                            error_parts.append(f"### Command {idx}: `{cmd}` ✅")
+                                        else:
+                                            error_parts.append(f"### Command {idx}: `{cmd}` ❌ (exit code: {returncode})")
+                                        
+                                        stdout = res.get("stdout", "").strip()
+                                        stderr = res.get("stderr", "").strip()
+                                        
+                                        if stdout:
+                                            error_parts.append(f"**STDOUT:**\n```\n{stdout[:500]}\n```")  # Truncate
+                                        if stderr:
+                                            error_parts.append(f"**STDERR:**\n```\n{stderr[:500]}\n```")
+                                
+                                # Include the full LLM output for context
+                                llm_output = result.get("output", "")
+                                if llm_output:
+                                    error_parts.append("\n## Full LLM Response:")
+                                    error_parts.append(f"```\n{llm_output[:1000]}\n```")  # Truncate to avoid massive emails
+                                
+                                # Update status and include comprehensive error details
                                 result["status"] = "failed"
-                                result["error"] = f"Expected files were not created: {', '.join(missing_files)}"
+                                result["error"] = "\n".join(error_parts)
                 
                 self.queue.update_task_status(
                     task_id=task_id,

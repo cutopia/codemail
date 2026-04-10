@@ -1,0 +1,4 @@
+Codemail Workspace
+Project: default
+Created: 2026-04-09T20:54:09.452190
+This directory is managed by the codemail agent.

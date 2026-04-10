@@ -1,0 +1,4 @@
+Codemail Workspace
+Project: e2e_test
+Created: 2026-04-09T21:04:36.387712
+This directory is managed by the codemail agent.

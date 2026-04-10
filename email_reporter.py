@@ -213,8 +213,41 @@ class EmailReporter:
                     "Task failed to complete.",
                     "",
                     "## Error:",
-                    error or "Unknown error occurred"
+                    error or "Unknown error occurred",
+                    "",
+                    "## Diagnostic Information:"
                 ])
+                
+                # Add diagnostic information if available
+                if output:
+                    # Check if output contains detailed error information (from our enhanced reporting)
+                    if "File Verification Details:" in output or "Bash Command" in output:
+                        report_lines.append("\n### Execution Details:")
+                        # Extract and format the key diagnostic sections
+                        import re
+                        
+                        # Try to extract file verification details
+                        file_verification_match = re.search(r'## File Verification Details:(.*?)(?=##|$)', output, re.DOTALL)
+                        if file_verification_match:
+                            report_lines.append("\n**File Status:**")
+                            report_lines.append(file_verification_match.group(1).strip())
+                        
+                        # Try to extract bash command results
+                        bash_results_match = re.search(r'## All Bash Commands Executed:(.*?)(?=##|$)', output, re.DOTALL)
+                        if bash_results_match:
+                            report_lines.append("\n**Bash Command Results:**")
+                            report_lines.append(bash_results_match.group(1).strip())
+                        
+                        # Try to extract LLM response
+                        llm_response_match = re.search(r'## Full LLM Response:(.*?)(?=##|$)', output, re.DOTALL)
+                        if llm_response_match:
+                            report_lines.append("\n**LLM Response Preview:**")
+                            report_lines.append(llm_response_match.group(1).strip())
+                    else:
+                        # Fallback: show output as-is
+                        report_lines.append(f"\n**Output:**\n```\n{output[:500]}\n```")  # Truncate long output
+                else:
+                    report_lines.append("No additional diagnostic information available.")
             else:
                 report_lines.extend([
                     "",

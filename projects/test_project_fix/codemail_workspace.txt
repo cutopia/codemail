@@ -1,0 +1,4 @@
+Codemail Workspace
+Project: test_project_fix
+Created: 2026-04-09T20:59:23.712508
+This directory is managed by the codemail agent.

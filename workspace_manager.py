@@ -193,6 +193,27 @@ class WorkspaceManager:
                     "timestamp": datetime.now().isoformat()
                 }
         
+        # NEW: Additional filtering for non-command text
+        additional_indicators = [
+            r'^markdown$',
+            r'^Bliss\s*\(',
+            r'^[A-Z][a-z]+\s+\(\d{4}\)$',  # Project name with year like "Project (2026)"
+            r'^#{1,6}\s+',                  # Markdown headings
+            r'\*\*.*\*\*',                 # Bold markdown text (anywhere in string)
+        ]
+        
+        for indicator in additional_indicators:
+            if re.match(indicator, command, re.IGNORECASE):
+                logger.warning(f"Skipping non-bash content as bash command: {command[:50]}...")
+                return {
+                    "stdout": "",
+                    "stderr": f"Error: Non-bash content detected and not executed: {command[:100]}...",
+                    "returncode": -1,
+                    "command": command,
+                    "workspace": self.get_project_path(project_name),
+                    "timestamp": datetime.now().isoformat()
+                }
+        
         # Also check for common LLM response patterns
         if any(phrase in command.lower() for phrase in [
             'i don\'t have',
@@ -210,6 +231,26 @@ class WorkspaceManager:
                 "workspace": self.get_project_path(project_name),
                 "timestamp": datetime.now().isoformat()
             }
+        
+        # NEW: Filter out single words that don't look like bash commands
+        word_count = len(command.strip().split())
+        if word_count == 1:
+            cmd_lower = command.lower().strip()
+            valid_command_prefixes = [
+                'ls', 'cd', 'cat', 'echo', 'mkdir', 'rm', 'cp', 'mv',
+                'git', 'python', 'node', 'npm', 'curl', 'wget', 'chmod',
+                'pwd', 'whoami', 'date', 'time', 'sleep', 'test', 'true', 'false'
+            ]
+            if not any(cmd_lower.startswith(prefix) for prefix in valid_command_prefixes):
+                logger.warning(f"Skipping non-command single word: {command[:50]}...")
+                return {
+                    "stdout": "",
+                    "stderr": f"Error: Single word detected and not executed (not a recognized command): {command[:100]}...",
+                    "returncode": -1,
+                    "command": command,
+                    "workspace": self.get_project_path(project_name),
+                    "timestamp": datetime.now().isoformat()
+                }
         
         project_path = self.get_project_path(project_name)
         

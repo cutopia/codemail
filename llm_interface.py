@@ -119,6 +119,11 @@ class LLMInterface:
                 r'^##\s+Steps',
                 r'^##\s+Results',
                 r'^##\s+Errors',
+                # NEW: Filter out project names, markdown syntax, and other non-command text
+                r'^markdown$',
+                r'^Bliss\s*\(',
+                r'^[A-Z][a-z]+\s+\(\d{4}\)$',  # Project name with year like "Project (2026)"
+                r'^[A-Za-z_]+\s+[A-Z]',         # Two words where second starts with capital
             ]
             
             is_natural_language = False
@@ -147,6 +152,26 @@ class LLMInterface:
                     'once clarified',
                     'you are a coding assistant'
                 ]):
+                    is_natural_language = True
+            
+            # NEW: Additional filtering for non-command text that might slip through
+            if not is_natural_language and not is_heredoc_command:
+                # Check for common patterns that indicate non-bash content
+                cmd_lower = cmd.lower()
+                
+                # Skip if it's just a single word that doesn't look like a command
+                if word_count == 1 and not any(cmd_lower.startswith(prefix) for prefix in [
+                    'ls', 'cd', 'cat', 'echo', 'mkdir', 'rm', 'cp', 'mv', 
+                    'git', 'python', 'node', 'npm', 'curl', 'wget', 'chmod'
+                ]):
+                    is_natural_language = True
+                
+                # Skip if it contains markdown-style formatting
+                if re.search(r'^#{1,6}\s+', cmd) or re.search(r'\*\*.*\*\*', cmd):
+                    is_natural_language = True
+                
+                # Skip if it looks like a heading or title (all caps with spaces)
+                if word_count <= 3 and cmd.isupper() and ' ' in cmd:
                     is_natural_language = True
             
             # Only add if it's not natural language (or is a heredoc command)
@@ -223,8 +248,32 @@ class LLMInterface:
                 if re.match(r'^[-*]\s+', line):
                     continue
                 
+                # NEW: Additional filtering for non-command text
+                # Check for project names, markdown syntax, and other non-bash content
+                additional_indicators = [
+                    r'^markdown$',
+                    r'^Bliss\s*\(',
+                    r'^[A-Z][a-z]+\s+\(\d{4}\)$',  # Project name with year like "Project (2026)"
+                    r'^#{1,6}\s+',                  # Markdown headings
+                    r'\*\*.*\*\*',                 # Bold markdown text
+                ]
+                
+                is_additional_natural_language = False
+                for indicator in additional_indicators:
+                    if re.match(indicator, line, re.IGNORECASE):
+                        is_additional_natural_language = True
+                        break
+                
+                # Skip single words that don't look like commands
+                word_count = len(line.split())
+                if word_count == 1 and not any(line.lower().startswith(prefix) for prefix in [
+                    'ls', 'cd', 'cat', 'echo', 'mkdir', 'rm', 'cp', 'mv', 
+                    'git', 'python', 'node', 'npm', 'curl', 'wget', 'chmod'
+                ]):
+                    is_additional_natural_language = True
+                
                 # Only add if it's not natural language and looks like a command
-                if not is_natural_language and len(line.split()) <= 15:
+                if not is_natural_language and not is_additional_natural_language and len(line.split()) <= 15:
                     commands.append(line)
         
         return commands
@@ -351,10 +400,82 @@ Any errors encountered during execution"""
         bash_commands = self._extract_bash_commands(response)
         bash_results = []
         
+        # CRITICAL FIX: Use the actual project context path directly when available
+        # The workspace manager's execute_in_workspace uses its own base directory,
+        # so we need to handle this differently. If project_context is an absolute path,
+        # we should use it directly instead of converting to a project name.
+        
         if bash_executor and bash_commands:
             for cmd in bash_commands:
                 try:
-                    result = bash_executor.execute_command(cmd, project_name="default")
+                    # CRITICAL FIX: Validate command before execution
+                    # Check if it's a natural language response that should be filtered out
+                    import re
+                    
+                    # Use the same validation logic as workspace_manager
+                    natural_language_indicators = [
+                        r'^I\s+(don\'t|do\s+not)\s+hav',
+                        r'^Please\s+clarif',
+                        r'^To\s+accomplish',
+                        r'^Once\s+clarifi',
+                        r'^You\s+are\s+a',
+                        r'^CRITICAL\s+REQUIREMENTS',
+                        r'^Bash\s+Command',
+                        r'^##\s+Summary',
+                        r'^##\s+Steps',
+                        r'^##\s+Results',
+                        r'^##\s+Errors',
+                    ]
+                    
+                    additional_indicators = [
+                        r'^markdown$',
+                        r'^Bliss\s*\(',
+                        r'^[A-Z][a-z]+\s+\(\d{4}\)$',
+                        r'^#{1,6}\s+',
+                        r'\*\*.*\*\*',
+                    ]
+                    
+                    is_natural_language = False
+                    for indicator in natural_language_indicators + additional_indicators:
+                        if re.match(indicator, cmd, re.IGNORECASE | re.MULTILINE):
+                            is_natural_language = True
+                            break
+                    
+                    # Also check single words that don't look like commands
+                    word_count = len(cmd.split())
+                    if word_count == 1 and not any(cmd.lower().startswith(prefix) for prefix in [
+                        'ls', 'cd', 'cat', 'echo', 'mkdir', 'rm', 'cp', 'mv',
+                        'git', 'python', 'node', 'npm', 'curl', 'wget', 'chmod',
+                        'pwd', 'whoami', 'date', 'time', 'sleep', 'test', 'true', 'false'
+                    ]):
+                        is_natural_language = True
+                    
+                    if is_natural_language:
+                        logger.warning(f"Command filtered out (natural language): {cmd[:50]}...")
+                        bash_results.append({
+                            "command": cmd,
+                            "result": {
+                                "stdout": "",
+                                "stderr": f"Error: Natural language response detected and not executed: {cmd[:100]}...",
+                                "returncode": -1
+                            }
+                        })
+                        continue
+                    
+                    # Execute command in the appropriate directory
+                    if project_context and os.path.isabs(project_context):
+                        # Execute directly in absolute path directory
+                        result = subprocess.run(
+                            cmd,
+                            shell=True,
+                            cwd=project_context,
+                            capture_output=True,
+                            text=True,
+                            timeout=300
+                        )
+                    else:
+                        # Use the workspace manager with project name
+                        result = bash_executor.execute_command(cmd, project_name=project_context or "default")
                     bash_results.append({
                         "command": cmd,
                         "result": result
@@ -377,12 +498,31 @@ Any errors encountered during execution"""
                                 else:
                                     response += f"\n[WARNING: File {filename} may not have been created properly]"
                     else:
-                        response += f"\n\n[Bash Command Error]\nCommand: {cmd}\nError:\n{result.get('stderr', '')}"
+                        # Include comprehensive error information
+                        stderr = result.get("stderr", "")
+                        returncode = result.get("returncode", -1)
+                        
+                        error_info = f"Command: {cmd}\nExit Code: {returncode}\nError:\n{stderr}"
+                        
+                        if not stderr and returncode != 0:
+                            # Try to provide more context for common failure modes
+                            error_info += "\n\nNote: Command failed with non-zero exit code but no stderr output."
+                            error_info += "\nPossible causes:"
+                            error_info += "\n- File/directory permissions issue"
+                            error_info += "\n- Path does not exist"
+                            error_info += "\n- Invalid command syntax"
+                        
+                        response += f"\n\n[Bash Command Error]\n{error_info}"
                         
                 except Exception as e:
+                    # Include exception details in bash results
                     bash_results.append({
                         "command": cmd,
-                        "error": str(e)
+                        "result": {
+                            "stdout": "",
+                            "stderr": str(e),
+                            "returncode": -1
+                        }
                     })
         
         return {
