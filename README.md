@@ -115,7 +115,10 @@ codemail/
 ├── whitelist.py         # Email whitelist functionality
 ├── api_server.py        # REST API for status monitoring
 ├── worker.py            # Celery worker
-└── projects/            # Project workspaces (created at runtime)
+├── projects/            # Project workspaces (created at runtime)
+│
+└── docs/                # Developer documentation
+    └── IMPLEMENTATION_NOTES.md  # Technical implementation details
 ```
 
 ## Security Considerations
@@ -130,12 +133,11 @@ codemail/
 ### Running Tests
 
 ```bash
-# Test whitelist functionality
-python test_whitelist.py
-
-# Run integration tests
-python test_integration.py
+# Test command filtering
+python tests/test_command_filtering.py
 ```
+
+For more testing information, see [docs/IMPLEMENTATION_NOTES.md](docs/IMPLEMENTATION_NOTES.md).
 
 ### Adding Features
 
