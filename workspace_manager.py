@@ -272,7 +272,7 @@ class WorkspaceManager:
                 timeout=300  # 5 minute timeout
             )
             
-            # CRITICAL FIX: Verify file creation for common file operations
+            # CRITICAL FIX: Enhanced file creation verification with detailed logging
             if 'cat >' in command or 'echo >' in command:
                 import re
                 # Try heredoc pattern first, then simple redirection
@@ -283,10 +283,24 @@ class WorkspaceManager:
                 if match:
                     filename = match.group(1).strip()
                     filepath = os.path.join(project_path, filename)
+                    
+                    # Enhanced logging with workspace context
+                    logger.info(f"File creation command executed: {filename}")
+                    logger.info(f"  Command: {command[:80]}...")
+                    logger.info(f"  Workspace: {project_path}")
+                    logger.info(f"  Expected path: {filepath}")
+                    
                     if os.path.exists(filepath):
-                        logger.info(f"File created successfully: {filename}")
+                        size = os.path.getsize(filepath)
+                        logger.info(f"✅ File created successfully: {filename} ({size} bytes)")
                     else:
-                        logger.warning(f"Command executed but file may not exist: {filename}")
+                        # CRITICAL FIX: Log additional diagnostic info for failed file creation
+                        logger.warning(f"❌ Command executed but file may not exist: {filename}")
+                        logger.warning(f"  Workspace exists: {os.path.exists(project_path)}")
+                        if os.path.exists(project_path):
+                            logger.warning(f"  Files in workspace: {os.listdir(project_path)}")
+                        logger.warning(f"  Return code: {result.returncode}")
+                        logger.warning(f"  Stderr: {result.stderr[:200]}")
             
             output = {
                 "stdout": result.stdout,

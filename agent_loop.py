@@ -215,8 +215,16 @@ class AgentLoop:
                         if missing_files:
                             logger.warning(f"Task marked complete but files were not created: {missing_files}")
                             
+                            # CRITICAL FIX: Log additional diagnostic information
+                            workspace_path = project_path  # This should be available from context
+                            logger.warning(f"Workspace path: {workspace_path}")
+                            logger.warning(f"Files in workspace: {os.listdir(workspace_path) if workspace_path and os.path.exists(workspace_path) else 'N/A'}")
+                            
                             # Build comprehensive error message with diagnostic details
                             error_parts = [f"Expected files were not created: {', '.join(missing_files)}"]
+                            error_parts.append(f"\n## Diagnostic Information:")
+                            error_parts.append(f"- Workspace Path: `{workspace_path}`")
+                            error_parts.append(f"- Files in Workspace: `{os.listdir(workspace_path) if workspace_path and os.path.exists(workspace_path) else 'N/A'}`")
                             error_parts.append("\n## File Verification Details:")
                             
                             for file_info in file_verification_details:
@@ -245,7 +253,11 @@ class AgentLoop:
                                             else:
                                                 error_parts.append(f"      Output: {stdout[:200]}")
                                     else:
-                                        error_parts.append("  No creation commands found in execution log")
+                                        # CRITICAL FIX: Provide more helpful diagnostic when no commands were executed
+                                        if not result.get("bash_results"):
+                                            error_parts.append("  ❌ NO BASH COMMANDS WERE EXECUTED - LLM may have just returned TASK_COMPLETE without executing any commands")
+                                        else:
+                                            error_parts.append("  No creation commands found in execution log")
                             
                             # Include full bash results for debugging
                             if result.get("bash_results"):
@@ -470,7 +482,11 @@ class AgentLoop:
                                                 else:
                                                     error_parts.append(f"      Output: {stdout[:200]}")
                                         else:
-                                            error_parts.append("  No creation commands found in execution log")
+                                            # CRITICAL FIX: Provide more helpful diagnostic when no commands were executed
+                                            if not result.get("bash_results"):
+                                                error_parts.append("  ❌ NO BASH COMMANDS WERE EXECUTED - LLM may have just returned TASK_COMPLETE without executing any commands")
+                                            else:
+                                                error_parts.append("  No creation commands found in execution log")
                                 
                                 # Include full bash results for debugging
                                 if result.get("bash_results"):

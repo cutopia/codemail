@@ -94,14 +94,27 @@ class LLMInterface:
         
         commands = []
         for match in matches:
-            # Clean up the command (remove leading/trailing whitespace)
-            cmd = match.strip()
+            # Split the match into individual commands (separated by newlines)
+            lines = [line.strip() for line in match.split('\n') if line.strip()]
             
-            # Skip if empty
-            if not cmd:
-                continue
-            
-            # CRITICAL FIX: Validate that this is actually a bash command, not natural language
+            i = 0
+            while i < len(lines):
+                cmd = lines[i]
+                
+                # CRITICAL FIX: For heredoc commands (cat > file << EOF), extract only the command line
+                # not the entire heredoc content. This prevents filtering out valid commands.
+                
+                # Check if this is a heredoc command and extract just the command part
+                heredoc_match = re.match(r'^(cat|echo)\s+>[^\n]*', cmd)
+                if heredoc_match:
+                    cmd = heredoc_match.group(0).strip()
+                
+                # Skip if empty
+                if not cmd:
+                    i += 1
+                    continue
+                
+                # CRITICAL FIX: Validate that this is actually a bash command, not natural language
             # Natural language responses often contain phrases like "I don't have", "Please clarify",
             # "To accomplish this", etc. We should filter these out.
             
@@ -706,6 +719,14 @@ Please review this output and continue with the task if needed. If the task is c
                 has_file_commands = any(cmd.strip().startswith(('cat >', 'echo >', 'mkdir -p')) for cmd in bash_commands) if bash_commands else False
                 
                 if "TASK_COMPLETE" in review_upper and len(llm_review.strip()) < 50:
+                    # CRITICAL FIX: If no bash commands were executed, don't mark complete
+                    if not bash_commands:
+                        logger.warning("LLM marked task complete but NO bash commands were executed")
+                        logger.warning(f"LLM response: '{llm_review}'")
+                        current_output = llm_review + "\n\nERROR: No bash commands were executed. Please execute bash commands to create files."
+                        iteration_history.append(current_output)
+                        continue  # Continue to next iteration to execute commands
+                    
                     # Verify files were actually created before marking complete
                     if has_file_commands and project_path:
                         # Check if expected files exist
@@ -725,7 +746,18 @@ Please review this output and continue with the task if needed. If the task is c
                         if files_created:
                             missing_files = [f for f in files_created if not os.path.exists(os.path.join(project_path, f))]
                             if missing_files:
+                                # CRITICAL FIX: Enhanced logging with workspace context
                                 logger.warning(f"Task marked complete but files are missing: {missing_files}")
+                                logger.warning(f"Project path: {project_path}")
+                                logger.warning(f"Files in project directory: {os.listdir(project_path) if os.path.exists(project_path) else 'N/A'}")
+                                
+                                # Log each file's status
+                                for f in files_created:
+                                    filepath = os.path.join(project_path, f)
+                                    exists = os.path.exists(filepath)
+                                    size = os.path.getsize(filepath) if exists else 0
+                                    logger.warning(f"File '{f}': exists={exists}, size={size} bytes")
+                                
                                 # Don't mark complete - continue iterations
                                 current_output = llm_review + "\n\nWARNING: The following files were not created: " + ", ".join(missing_files)
                                 iteration_history.append(current_output)
