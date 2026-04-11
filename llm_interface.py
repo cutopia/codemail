@@ -22,7 +22,26 @@ class LLMInterface:
     def __init__(self):
         self.endpoint = llm_config.endpoint
         self.api_key = llm_config.api_key
+        # Enable debug logging if configured
+        self.debug_logging = getattr(llm_config, 'debug_logging', False)
         
+    def _log_llm_message(self, title: str, content: str):
+        """
+        Log a message to console with clear formatting for debugging.
+        
+        Args:
+            title: Title of the log section
+            content: Content to log
+        """
+        if not self.debug_logging:
+            return
+        
+        print("\n" + "=" * 80)
+        print(f"LLM {title}")
+        print("=" * 80)
+        print(content)
+        print("=" * 80 + "\n")
+    
     def _make_request(self, messages: List[Dict[str, str]], max_tokens: int = None) -> Optional[str]:
         """
         Make a request to the LM Studio API.
@@ -55,14 +74,38 @@ class LLMInterface:
                 "temperature": 0.7
             }
             
+            # Log the messages being sent (input to LLM)
+            if self.debug_logging:
+                messages_str = "\n\n".join([
+                    f"Role: {msg['role']}\nContent:\n{msg['content']}"
+                    for msg in messages
+                ])
+                self._log_llm_message("MESSAGES SENT", messages_str)
+            
+            # Log the request being sent (input to LLM)
+            if self.debug_logging:
+                request_json = json.dumps(data, indent=2)
+                self._log_llm_message("REQUEST JSON", f"Request Data:\n{request_json}")
+            
             response = requests.post(url, json=data, headers=headers, timeout=120)
             response.raise_for_status()
             
             result = response.json()
             
+            # Log the response received (output from LLM)
+            if self.debug_logging:
+                response_json = json.dumps(result, indent=2)
+                self._log_llm_message("RESPONSE JSON", f"Response Data:\n{response_json}")
+            
             # Extract content from response
             if "choices" in result and len(result["choices"]) > 0:
-                return result["choices"][0]["message"]["content"]
+                content = result["choices"][0]["message"]["content"]
+                
+                # Log the extracted content (output from LLM)
+                if self.debug_logging:
+                    self._log_llm_message("EXTRACTED CONTENT", f"Extracted Content:\n{content}")
+                
+                return content
             
             logger.error(f"Unexpected API response format: {result}")
             return None
@@ -306,6 +349,10 @@ class LLMInterface:
         """
         logger.info(f"Executing task with instructions: {instructions[:100]}...")
         
+        # Log the full instructions if debug logging is enabled
+        if self.debug_logging:
+            self._log_llm_message("TASK INSTRUCTIONS", f"Instructions:\n{instructions}")
+        
         # Build system prompt for coding agent with bash execution capability
         system_prompt = """You are an expert coding assistant. Your task is to analyze the project context and execute the user's instructions.
 
@@ -408,6 +455,10 @@ Any errors encountered during execution"""
             }
         
         logger.info("Task execution completed successfully")
+        
+        # Log the final response if debug logging is enabled
+        if self.debug_logging:
+            self._log_llm_message("FINAL RESPONSE", f"Final Response:\n{response}")
         
         # Extract and execute any bash commands from the response
         bash_commands = self._extract_bash_commands(response)

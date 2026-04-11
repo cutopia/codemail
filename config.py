@@ -84,6 +84,8 @@ class LLMConfig:
         self.api_key = os.getenv("LLM_API_KEY", "dummy_key")
         # Context window configuration - default to very high value for modern LLMs
         self.max_tokens = int(os.getenv("LLM_MAX_TOKENS", "262144"))
+        # Debug logging for LLM inputs/outputs
+        self.debug_logging = os.getenv("LLM_DEBUG_LOGGING", "false").lower() == "true"
 
 
 class DatabaseConfig:
