@@ -77,6 +77,8 @@ class EmailReporter:
             msg['To'] = recipient
             msg['Subject'] = subject
             
+            logger.debug(f"Email subject: {subject}")
+            
             # Add body as HTML and plain text
             html_body = f"""
             <html>
@@ -95,17 +97,29 @@ class EmailReporter:
             msg.attach(MIMEText(html_body, 'html'))
             
             # Connect to SMTP server and send email
+            logger.info(f"Connecting to SMTP server {self.smtp_host}:{self.smtp_port}")
+            
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                logger.debug("SMTP connection established")
                 server.starttls()  # Secure the connection
+                logger.debug("TLS started")
                 server.login(self.email_address, self.email_password)
+                logger.debug("SMTP login successful")
                 server.send_message(msg)
-                
+                logger.info(f"Email message sent to {recipient}")
+            
             logger.info(f"Report sent successfully to {recipient}")
             logger.debug(f"Email details: subject={msg['Subject']}, from={msg['From']}, to={msg['To']}")
             return True
             
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"SMTP authentication failed for {recipient}: {e}", exc_info=True)
+            return False
+        except smtplib.SMTPConnectError as e:
+            logger.error(f"SMTP connection failed for {recipient}: {e}", exc_info=True)
+            return False
         except Exception as e:
-            logger.error(f"Failed to send email report: {e}")
+            logger.error(f"Failed to send email report to {recipient}: {e}", exc_info=True)
             return False
     
     def send_task_report(self, recipient: str, task_id: str, task_data: dict) -> bool:
@@ -123,11 +137,14 @@ class EmailReporter:
         logger.info(f"Preparing to send task report to {recipient} (task_id: {task_id})")
         
         # Check whitelist before formatting and sending
-        if not self._is_recipient_whitelisted(recipient):
+        is_whitelisted = self._is_recipient_whitelisted(recipient)
+        logger.debug(f"Whitelist check for {recipient}: {'PASS' if is_whitelisted else 'FAIL'}")
+        
+        if not is_whitelisted:
             logger.error(f"Cannot send task report to non-whitelisted recipient: {recipient}")
             return False
         
-        logger.debug(f"Recipient {recipient} is whitelisted, proceeding with report")
+        logger.info(f"Recipient {recipient} is whitelisted, proceeding with report formatting")
         
         try:
             # Extract task information

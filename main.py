@@ -51,8 +51,11 @@ def main():
                     logger.info(f"Email processed successfully. Task ID: {task_id}")
                     
                     # Execute the task immediately (single-task mode)
+                    logger.info(f"Executing task {task_id}...")
                     success = agent.execute_task(task_id)
-                    if not success:
+                    if success:
+                        logger.info(f"Task {task_id} completed successfully")
+                    else:
                         logger.error(f"Task execution failed for task {task_id}")
                     
                 elif task_id is None:

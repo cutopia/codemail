@@ -83,12 +83,25 @@ def process_task(self, task_id: str):
             })
         
         # Send report to sender
-        if task.get("sender"):
+        sender = task.get("sender")
+        if not sender:
+            logger.error(f"No sender found in task {task_id} - cannot send completion report. Task keys: {list(task.keys())}")
+            return {
+                "status": result["status"],
+                "output": result.get("output"),
+                "error": result.get("error"),
+                "warning": "No sender found, email not sent"
+            }
+        
+        try:
+            logger.info(f"Sending task completion report to {sender} (task_id: {task_id})")
             reporter.send_task_report(
-                recipient=task["sender"],
+                recipient=sender,
                 task_id=task_id,
                 task_data=result
             )
+        except Exception as e:
+            logger.error(f"Exception while sending report to {sender}: {e}", exc_info=True)
         
         return {
             "status": result["status"],

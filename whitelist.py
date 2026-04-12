@@ -95,7 +95,7 @@ class EmailWhitelist:
         # Normalize recipient to lowercase for comparison
         recipient_normalized = recipient.lower().strip()
         
-        logger.debug(f"Checking if '{recipient_normalized}' matches whitelist: {self.allowed_recipients}")
+        logger.info(f"Checking if '{recipient_normalized}' matches whitelist: {self.allowed_recipients}")
         
         # Direct match
         if recipient_normalized in self.allowed_recipients:

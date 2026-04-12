@@ -555,7 +555,11 @@ class AgentLoop:
                 
                 # Send report to sender
                 sender = task.get("sender", "")
-                if sender:
+                if not sender:
+                    logger.error(f"No sender found in task {task_id} - cannot send completion report. Task data keys: {list(task.keys())}")
+                    return False
+                
+                try:
                     logger.info(f"Sending task completion report to: {sender}")
                     success = self.reporter.send_task_report(
                         recipient=sender,
@@ -566,8 +570,10 @@ class AgentLoop:
                         logger.info(f"Report sent successfully to {sender}")
                     else:
                         logger.error(f"Failed to send report to {sender} - check email configuration and whitelist")
-                else:
-                    logger.warning("No sender found in task - cannot send completion report. Task data: %s", str(task))
+                        return False
+                except Exception as e:
+                    logger.error(f"Exception while sending report to {sender}: {e}", exc_info=True)
+                    return False
                 
                 return True
                 
