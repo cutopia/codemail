@@ -41,11 +41,15 @@ class EmailReporter:
             logger.debug("No whitelist configured - allowing all recipients")
             return True
         
+        logger.debug(f"Checking if recipient '{recipient}' is whitelisted...")
+        
         # Check if recipient is whitelisted
         is_whitelisted = self.whitelist.is_recipient_whitelisted(recipient)
         
         if not is_whitelisted:
             logger.warning(f"Recipient '{recipient}' is not in the email whitelist - report will be blocked")
+        else:
+            logger.debug(f"Recipient '{recipient}' is whitelisted")
         
         return is_whitelisted
     
@@ -97,6 +101,7 @@ class EmailReporter:
                 server.send_message(msg)
                 
             logger.info(f"Report sent successfully to {recipient}")
+            logger.debug(f"Email details: subject={msg['Subject']}, from={msg['From']}, to={msg['To']}")
             return True
             
         except Exception as e:
@@ -115,10 +120,14 @@ class EmailReporter:
         Returns:
             True if email sent successfully, False otherwise
         """
+        logger.info(f"Preparing to send task report to {recipient} (task_id: {task_id})")
+        
         # Check whitelist before formatting and sending
         if not self._is_recipient_whitelisted(recipient):
             logger.error(f"Cannot send task report to non-whitelisted recipient: {recipient}")
             return False
+        
+        logger.debug(f"Recipient {recipient} is whitelisted, proceeding with report")
         
         try:
             # Extract task information

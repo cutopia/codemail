@@ -86,7 +86,19 @@ class AgentLoop:
                 priority=priority
             )
             
-            logger.info(f"Task created with ID: {task_id} (priority: {priority})")
+            # Log sender information for debugging report issues
+            sender = parsed_data.get("sender", "")
+            logger.info(f"Task created with ID: {task_id} (priority: {priority}, sender: '{sender}')")
+            
+            # Verify that the task was actually created in the database
+            try:
+                stored_task = self.queue.get_task(task_id)
+                if stored_task and stored_task.get("sender") == sender:
+                    logger.debug(f"Task verified in database with sender: '{stored_task.get('sender')}'")
+                else:
+                    logger.warning(f"Task sender mismatch! Created with sender='{sender}', but database has sender='{stored_task.get('sender', 'N/A') if stored_task else 'NOT FOUND'}'")
+            except Exception as e:
+                logger.warning(f"Could not verify task in database: {e}")
             
             return task_id
             
@@ -113,7 +125,9 @@ class AgentLoop:
                 return {"status": "failed", "error": "Task not found"}
             
             project_name = task.get('project_name', 'default')
+            sender = task.get('sender', '')
             logger.info(f"Executing task {task_id} for project '{project_name}': {task['instructions'][:100]}...")
+            logger.debug(f"Task data: id={task.get('id')}, status={task.get('status')}, sender='{sender}', priority={task.get('priority')}")
             
             # Create workspace for the project
             try:
@@ -355,7 +369,9 @@ class AgentLoop:
                     return False
                 
                 project_name = task.get('project_name', 'default')
+                sender = task.get('sender', '')
                 logger.info(f"Executing task {task_id} for project '{project_name}' (attempt {attempt + 1}/{self.max_retries + 1}): {task['instructions'][:100]}...")
+                logger.debug(f"Task data: id={task.get('id')}, status={task.get('status')}, sender='{sender}', priority={task.get('priority')}")
                 
                 # Create workspace for the project
                 try:
@@ -538,12 +554,20 @@ class AgentLoop:
                     })
                 
                 # Send report to sender
-                if task.get("sender"):
-                    self.reporter.send_task_report(
-                        recipient=task["sender"],
+                sender = task.get("sender", "")
+                if sender:
+                    logger.info(f"Sending task completion report to: {sender}")
+                    success = self.reporter.send_task_report(
+                        recipient=sender,
                         task_id=task_id,
                         task_data=result
                     )
+                    if success:
+                        logger.info(f"Report sent successfully to {sender}")
+                    else:
+                        logger.error(f"Failed to send report to {sender} - check email configuration and whitelist")
+                else:
+                    logger.warning("No sender found in task - cannot send completion report. Task data: %s", str(task))
                 
                 return True
                 

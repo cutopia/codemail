@@ -39,7 +39,8 @@ class EmailWhitelist:
                 # Normalize to lowercase
                 self.allowed_recipients.add(email.lower())
         
-        logger.info(f"Whitelist initialized with {len(self.allowed_senders)} allowed senders and {len(self.allowed_recipients)} allowed recipients")
+        logger.info(f"Whitelist initialized with {len(self.allowed_senders)} allowed senders: {self.allowed_senders}")
+        logger.info(f"Whitelist initialized with {len(self.allowed_recipients)} allowed recipients: {self.allowed_recipients}")
     
     def is_sender_whitelisted(self, sender: str) -> bool:
         """
@@ -84,16 +85,21 @@ class EmailWhitelist:
         """
         # If no whitelist is configured (empty set), allow all for backward compatibility
         if not self.allowed_recipients:
+            logger.debug(f"No recipient whitelist configured - allowing all recipients")
             return True
         
         if not recipient:
+            logger.warning("Recipient email is empty - cannot be whitelisted")
             return False
         
         # Normalize recipient to lowercase for comparison
         recipient_normalized = recipient.lower().strip()
         
+        logger.debug(f"Checking if '{recipient_normalized}' matches whitelist: {self.allowed_recipients}")
+        
         # Direct match
         if recipient_normalized in self.allowed_recipients:
+            logger.debug(f"'{recipient_normalized}' found in allowed recipients")
             return True
         
         # Check if any whitelist entry is a domain (e.g., @example.com)

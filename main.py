@@ -39,6 +39,11 @@ def main():
                 email_data: Dictionary with email content
             """
             try:
+                # Log email details for debugging
+                sender = email_data.get("sender_email", "")
+                subject = email_data.get("subject", "")
+                logger.debug(f"Processing email from {sender}: '{subject}'")
+                
                 # Process email and create task
                 task_id = agent.process_email(email_data)
                 
@@ -46,7 +51,9 @@ def main():
                     logger.info(f"Email processed successfully. Task ID: {task_id}")
                     
                     # Execute the task immediately (single-task mode)
-                    agent.execute_task(task_id)
+                    success = agent.execute_task(task_id)
+                    if not success:
+                        logger.error(f"Task execution failed for task {task_id}")
                     
                 elif task_id is None:
                     # Email was parsed but not a valid codemail request
