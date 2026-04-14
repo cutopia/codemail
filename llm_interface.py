@@ -705,11 +705,22 @@ Your improved response:"""
                 {"role": "user", "content": refine_prompt}
             ]
             
+            logger.info(f"Starting refinement iteration {i}/{max_iterations} - asking LLM for review...")
             # Use configurable max_tokens for refinement iterations
             refined_response = self._make_request(messages, max_tokens=llm_config.max_tokens)
             
             if not refined_response:
-                break
+                logger.error("LLM failed to provide refined response - marking task as failed")
+                return {
+                    "status": "failed",
+                    "output": current_output,
+                    "error": "LLM failed to provide refined response",
+                    "iterations": i,
+                    "iteration_history": iteration_history,
+                    "step_summaries": step_summaries
+                }
+            
+            logger.info(f"Refined response received ({len(refined_response)} characters)")
             
             # Extract and execute any bash commands from the refined response
             bash_commands = self._extract_bash_commands(refined_response)
@@ -738,7 +749,7 @@ Your improved response:"""
                         })
                 
                 # After executing bash commands, ask LLM to review the output and continue
-                logger.debug(f"Executing {len(bash_commands)} bash command(s)")
+                logger.info(f"Executing {len(bash_commands)} bash command(s)")
                 
                 if bash_commands:
                     review_prompt = f"""I executed the following bash command(s) in the project workspace:
@@ -756,10 +767,22 @@ Please review this output and continue with the task if needed. If the task is c
                         {"role": "user", "content": review_prompt}
                     ]
                     
+                    logger.info("Asking LLM to review bash execution results...")
                     # Get LLM's review of the bash execution with configurable max_tokens
                     llm_review = self._make_request(messages, max_tokens=llm_config.max_tokens)
                     
-                    logger.debug(f"LLM review: {llm_review[:100] if llm_review else 'None'}...")
+                    if llm_review is None:
+                        logger.error("LLM review request returned None - task may stall")
+                        current_output = refined_response + "\n\nERROR: LLM failed to provide review after bash execution."
+                        iteration_history.append(current_output)
+                        break  # Exit loop to prevent stalling
+                    elif len(llm_review.strip()) == 0:
+                        logger.warning("LLM review request returned empty string - task may stall")
+                        current_output = refined_response + "\n\nWARNING: LLM provided no review after bash execution."
+                        iteration_history.append(current_output)
+                        break  # Exit loop to prevent stalling
+                    else:
+                        logger.info(f"LLM review received ({len(llm_review)} characters): {llm_review[:100]}...")
             
             # Use LLM review as basis for next iteration if available and task not complete
             if llm_review:
@@ -769,7 +792,51 @@ Please review this output and continue with the task if needed. If the task is c
                 # CRITICAL FIX: Only mark complete if we actually have file creation commands that were executed
                 has_file_commands = any(cmd.strip().startswith(('cat >', 'echo >', 'mkdir -p')) for cmd in bash_commands) if bash_commands else False
                 
-                if "TASK_COMPLETE" in review_upper and len(llm_review.strip()) < 50:
+                # Check if LLM wants to stop (TASK_COMPLETE anywhere in response, not just exact match)
+                is_task_complete = "TASK_COMPLETE" in review_upper and len(bash_commands) == 0
+                
+                # NEW FIX: Also check if we've executed commands and the LLM is done
+                # If bash commands were executed but no new commands are requested, mark complete
+                if bash_commands and not refined_response.strip().endswith('```bash'):
+                    # We have executed commands and no more bash blocks in refined response
+                    logger.info("Bash commands executed successfully with no further instructions")
+                    
+                    current_output = llm_review
+                    iteration_history.append(current_output)
+                    
+                    # Capture final step summary with bash command details
+                    final_summary_parts = [f"Task marked complete after {i} refinement iterations."]
+                    
+                    if bash_commands:
+                        final_summary_parts.append(f"\n**Final Bash Commands Executed ({len(bash_commands)}):**")
+                        for j, cmd_result in enumerate(bash_results, 1):
+                            cmd = cmd_result.get("command", "")
+                            res = cmd_result.get("result", {})
+                            stdout = res.get("stdout", "").strip()[:200] if res else ""  # Truncate long output
+                            stderr = res.get("stderr", "").strip()[:200] if res else ""
+                            returncode = res.get("returncode", 0)
+                            
+                            cmd_summary = f"{j}. `{cmd}`"
+                            if returncode == 0:
+                                cmd_summary += f" ✅ (output: {stdout})"
+                            else:
+                                cmd_summary += f" ❌ (error: {stderr})"
+                            final_summary_parts.append(cmd_summary)
+                    
+                    final_output_chars = len(current_output)
+                    final_summary_parts.append(f"\n**Final Output:** {final_output_chars} characters")
+                    
+                    final_summary = "\n".join(final_summary_parts)
+                    step_summaries.append({
+                        "step": current_step,
+                        "description": "Task completion review",
+                        "summary": final_summary,
+                        "timestamp": datetime.now().isoformat() if 'datetime' in dir() else None
+                    })
+                    
+                    break  # Exit loop when task is complete
+                
+                elif is_task_complete:
                     # CRITICAL FIX: If no bash commands were executed, don't mark complete
                     if not bash_commands:
                         logger.warning("LLM marked task complete but NO bash commands were executed")
@@ -850,9 +917,55 @@ Please review this output and continue with the task if needed. If the task is c
                     })
                     
                     break  # Exit loop when task is complete
+                
                 else:
                     # LLM wants to continue - use the review as basis for next iteration
                     current_output = llm_review
+            elif llm_review is not None and len(llm_review.strip()) == 0:
+                # LLM returned empty response - this might indicate completion or error
+                logger.warning("LLM returned empty response after bash execution")
+                
+                if bash_commands:
+                    # We executed commands but got no further instructions - assume task complete
+                    logger.info("Bash commands executed with empty review - marking task complete")
+                    
+                    current_output = "Task completed. Bash commands were executed successfully."
+                    iteration_history.append(current_output)
+                    
+                    # Capture final step summary with bash command details
+                    final_summary_parts = [f"Task marked complete after {i} refinement iterations."]
+                    
+                    if bash_commands:
+                        final_summary_parts.append(f"\n**Final Bash Commands Executed ({len(bash_commands)}):**")
+                        for j, cmd_result in enumerate(bash_results, 1):
+                            cmd = cmd_result.get("command", "")
+                            res = cmd_result.get("result", {})
+                            stdout = res.get("stdout", "").strip()[:200] if res else ""  # Truncate long output
+                            stderr = res.get("stderr", "").strip()[:200] if res else ""
+                            returncode = res.get("returncode", 0)
+                            
+                            cmd_summary = f"{j}. `{cmd}`"
+                            if returncode == 0:
+                                cmd_summary += f" ✅ (output: {stdout})"
+                            else:
+                                cmd_summary += f" ❌ (error: {stderr})"
+                            final_summary_parts.append(cmd_summary)
+                    
+                    final_output_chars = len(current_output)
+                    final_summary_parts.append(f"\n**Final Output:** {final_output_chars} characters")
+                    
+                    final_summary = "\n".join(final_summary_parts)
+                    step_summaries.append({
+                        "step": current_step,
+                        "description": "Task completion review",
+                        "summary": final_summary,
+                        "timestamp": datetime.now().isoformat() if 'datetime' in dir() else None
+                    })
+                    
+                    break  # Exit loop when task is complete
+                else:
+                    # No bash commands executed and empty response - continue with refined response
+                    current_output = refined_response
             else:
                 # No bash commands or no LLM review - use refined response
                 current_output = refined_response
