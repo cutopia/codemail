@@ -25,5 +25,6 @@ class Settings:
         
         self.LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", 4096))
         self.LLM_DEBUG_LOGGING = os.getenv("LLM_DEBUG_LOGGING", "false").lower() == "true"
+        self.PROJECTS_BASE_DIR = os.getenv("PROJECTS_BASE_DIR", "~/projects")
 
 settings = Settings()

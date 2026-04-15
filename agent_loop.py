@@ -12,7 +12,7 @@ class AgentLoop:
         self.llm = LLMClient()
         self.email_handler = EmailHandler()
 
-    def execute_bash(self, command):
+    def execute_bash(self, command, cwd=None):
         """
         Executes a bash command with a timeout to prevent hanging.
         """
@@ -24,7 +24,7 @@ class AgentLoop:
                 capture_output=True,
                 text=True,
                 timeout=300, # 5 minutes timeout
-                cwd=os.getenv("PWD", ".")
+                cwd=cwd or os.getcwd()
             )
             return {
                 "stdout": result.stdout,
@@ -51,7 +51,16 @@ class AgentLoop:
         project_name = task['project']
         instructions = task['instructions']
         sender = task['sender']
+
+        project_path = os.path.expanduser(settings.PROJECTS_BASE_DIR)
+        if not os.path.exists(project_path):
+            os.makedirs(project_path, exist_ok=True)
         
+        full_project_dir = os.path.join(project_path, project_name)
+        os.makedirs(full_project_dir, exist_ok=True)
+        
+        cwd = full_project_dir
+
         history = [] # Local history per task to avoid leakage between tasks
         
         system_prompt = f"""
@@ -95,7 +104,7 @@ History:
             
             if "<bash>" in response:
                 command = response.split("<bash>")[1].split("</bash>")[0]
-                result = self.execute_bash(command)
+                result = self.execute_bash(command, cwd=cwd)
                 history.append(f"\nTurn {current_turn}: Agent requested <bash>{command}</bash>\nOutput: {result['stdout']}\nError: {result['stderr']}\nExit Code: {result['exit_code']}\n")
             else:
                 history.append(f"\nTurn {current_turn}: Agent thought process: {response}\n")
