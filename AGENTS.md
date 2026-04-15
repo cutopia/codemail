@@ -1,7 +1,7 @@
 # Codemail Project Plan
 
 ## Overview
-Codemail is a system that allows users to control a self-hosted LLM and coding agent remotely by sending emails with instructions. The system monitors incoming emails, processes tasks in an agentic loop, and reports back via email.
+Codemail is a system allowing users to control a self-hosted LLM and coding agent remotely by sending emails with instructions. The system monitors incoming emails, processes tasks in an agentic loop, making bash calls as needed to accomplish requested tasks, and reports back via email.
 
 ## Tech Stack
 
@@ -23,7 +23,6 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 - **email** - Built-in Python email parsing library
 
 ### Task Management
-- **SQLite/PostgreSQL** - Persistent storage for task queue and history
 - **UUID** - Unique task identifiers
 
 ## System Architecture
@@ -33,12 +32,11 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 │   Email Monitor │────▶│  Task Queue      │────▶│  Agent Loop     │
 │ (IMAP)          │     │  (Celery/Redis)  │     │  (Agentic)      │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
-         │                        │                      │
-         ▼                        ▼                      ▼
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Email Sender  │     │  Task Database   │     │  LLM Interface  │
-│ (SMTP)          │     │  (SQLite/PG)     │     │  (LangChain)    │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
+         │          
+         ▼          
+┌─────────────────┐ 
+│   Email Sender  │ 
+│ (SMTP)          │ 
          │
          ▼
 ┌─────────────────┐
@@ -80,10 +78,9 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 ## Development Guidelines
 
 ### Iterative Development Approach
-1. **Start Simple**: Begin with basic email monitoring and single-task execution
-2. **Maintain Runnability**: Ensure the project runs after each development step
-3. **Incremental Complexity**: Add features like queue management, concurrency, etc., one at a time
-4. **Test Each Component**: Verify functionality before moving to next phase
+1. **Maintain Runnability**: Ensure the project runs after each development step
+2. **Incremental Complexity**: Add features like queue management, concurrency, etc., one at a time
+3. **Test Each Component**: Verify functionality before moving to next phase
 
 ### Phase 1: Core Email Processing
 - Set up basic email monitoring (IMAP)
@@ -117,7 +114,7 @@ Codemail is a system that allows users to control a self-hosted LLM and coding a
 2. **Test-Driven Development**: Write tests for new functionality before implementation
 3. **Configuration Over Code**: Use environment variables for configuration (email credentials, LLM endpoints)
 4. **Error Handling**: Implement robust error handling for email parsing and task execution
-5. **Logging**: Maintain comprehensive logging for debugging and monitoring
+5. **Logging**: Maintain comprehensive logging for debugging and monitoring.
 6. **Security**: Never commit sensitive credentials; use .env files with gitignore
 7. **Documentation**: Update documentation as features are added
 8. **Unique Task IDs**: Use UUID4 for all tasks to enable reliable task management
