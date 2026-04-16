@@ -99,7 +99,7 @@ History:
             response = self.llm.generate_response(full_prompt, system_prompt=system_prompt)
             
             if "<finish>" in response:
-                final_report = response.split("<finish>")[1].split("</finish>")[1] if "</finish>" in response else response.split("<finish>")[1]
+                final_report = response.split("<finish>")[1].split("</finish>")[0] if "</finish>" in response else response.split("<finish>")[1]
                 return final_report
             
             if "<bash>" in response:
